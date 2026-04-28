@@ -1,0 +1,17 @@
+{
+  "displayName": "Lost Reports",
+  "name": "lost_reports",
+  "fields": [
+    { "name": "reporter_user_id", "type": "string", "required": true, "unique": false },
+    { "name": "item_title", "type": "string", "required": true, "unique": false },
+    { "name": "category", "type": "string", "required": true, "unique": false },
+    { "name": "color", "type": "string", "required": false, "unique": false },
+    { "name": "brand", "type": "string", "required": false, "unique": false },
+    { "name": "description", "type": "string", "required": true, "unique": false },
+    { "name": "location_lost", "type": "string", "required": true, "unique": false },
+    { "name": "date_lost", "type": "date", "required": true, "unique": false },
+    { "name": "status", "type": "string", "required": true, "unique": false },
+    { "name": "created_at", "type": "date", "required": true, "unique": false },
+    { "name": "updated_at", "type": "date", "required": true, "unique": false }
+  ]
+}

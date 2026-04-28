@@ -1,0 +1,11 @@
+{
+  "displayName": "Report Media",
+  "name": "report_media",
+  "fields": [
+    { "name": "owner_type", "type": "string", "required": true, "unique": false },
+    { "name": "owner_id", "type": "string", "required": true, "unique": false },
+    { "name": "media_url", "type": "string", "required": true, "unique": false },
+    { "name": "media_type", "type": "string", "required": true, "unique": false },
+    { "name": "created_at", "type": "date", "required": true, "unique": false }
+  ]
+}

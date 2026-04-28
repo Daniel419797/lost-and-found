@@ -1,0 +1,16 @@
+{
+  "displayName": "Claims",
+  "name": "claims",
+  "fields": [
+    { "name": "found_report_id", "type": "string", "required": true, "unique": false },
+    { "name": "claimant_user_id", "type": "string", "required": true, "unique": false },
+    { "name": "linked_lost_report_id", "type": "string", "required": false, "unique": false },
+    { "name": "evidence_text", "type": "string", "required": true, "unique": false },
+    { "name": "status", "type": "string", "required": true, "unique": false },
+    { "name": "decision_reason", "type": "string", "required": false, "unique": false },
+    { "name": "reviewed_by_user_id", "type": "string", "required": false, "unique": false },
+    { "name": "reviewed_at", "type": "date", "required": false, "unique": false },
+    { "name": "created_at", "type": "date", "required": true, "unique": false },
+    { "name": "updated_at", "type": "date", "required": true, "unique": false }
+  ]
+}

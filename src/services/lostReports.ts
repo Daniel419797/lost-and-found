@@ -1,0 +1,147 @@
+import api from "@/lib/api";
+import type {
+  CreateLostReportDTO,
+  ListResponseDTO,
+  LostReport,
+  LostReportQueryParams,
+  ModuleRunResult,
+  UpdateLostReportDTO,
+} from "@/types";
+
+type LostReportRow = {
+  id: string;
+  user_id: string;
+  item_title: string;
+  category: LostReport["category"];
+  color?: string;
+  brand?: string;
+  description?: string;
+  location_lost: string;
+  date_lost: string;
+  status: LostReport["status"];
+  created_at: string;
+  updated_at: string;
+};
+
+function getCurrentUserId(): string {
+  if (typeof window === "undefined") return "";
+  const token = localStorage.getItem("token");
+  if (!token) return "";
+  try {
+    const payload = JSON.parse(
+      atob(token.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"))
+    ) as Record<string, string>;
+    return payload.sub ?? payload.userId ?? payload.id ?? "";
+  } catch {
+    return "";
+  }
+}
+
+function toLostReport(row: LostReportRow): LostReport {
+  return {
+    id: row.id,
+    userId: row.user_id,
+    itemTitle: row.item_title,
+    category: row.category,
+    color: row.color,
+    brand: row.brand,
+    description: row.description,
+    locationLost: row.location_lost,
+    dateLost: row.date_lost,
+    status: row.status,
+    createdAt: row.created_at,
+    updatedAt: row.updated_at,
+  };
+}
+
+function toRowPayload(
+  data: CreateLostReportDTO | UpdateLostReportDTO
+): Partial<LostReportRow> {
+  const p: Partial<LostReportRow> = {};
+  if (data.itemTitle !== undefined) p.item_title = data.itemTitle;
+  if (data.category !== undefined) p.category = data.category;
+  if (data.color !== undefined) p.color = data.color;
+  if (data.brand !== undefined) p.brand = data.brand;
+  if (data.description !== undefined) p.description = data.description;
+  if (data.locationLost !== undefined) p.location_lost = data.locationLost;
+  if (data.dateLost !== undefined) p.date_lost = data.dateLost;
+  if ("status" in data && data.status !== undefined) p.status = data.status;
+  return p;
+}
+
+function asListResponse(
+  rows: LostReport[],
+  limit: number,
+  offset: number
+): ListResponseDTO<LostReport> {
+  return { data: rows, total: rows.length, limit, offset };
+}
+
+export const lostReportsApi = {
+  list: async (params?: LostReportQueryParams) => {
+    const limit = params?.limit ?? 200;
+    const offset = params?.offset ?? 0;
+    const res = await api.get<{ data: { rows: LostReportRow[]; total: number } }>(
+      "/table/lost_reports",
+      { params: { limit, offset } }
+    );
+    let rows = (res.data.data.rows ?? []).map(toLostReport);
+    if (params?.status) rows = rows.filter((r) => r.status === params.status);
+    if (params?.category) rows = rows.filter((r) => r.category === params.category);
+    if (params?.userId) rows = rows.filter((r) => r.userId === params.userId);
+    if (params?.from) rows = rows.filter((r) => r.dateLost >= params.from!);
+    if (params?.to) rows = rows.filter((r) => r.dateLost <= params.to!);
+    return { ...res, data: asListResponse(rows, limit, offset) };
+  },
+
+  listMine: async (params?: LostReportQueryParams) => {
+    const userId = getCurrentUserId();
+    return lostReportsApi.list({ ...params, userId });
+  },
+
+  getById: async (id: string) => {
+    const res = await api.get<{ data: LostReportRow }>(`/table/lost_reports/${id}`);
+    return { ...res, data: { data: toLostReport(res.data.data) } };
+  },
+
+  create: async (data: CreateLostReportDTO) => {
+    const userId = getCurrentUserId();
+    const payload: Partial<LostReportRow> = {
+      ...toRowPayload(data),
+      user_id: userId,
+      status: "open",
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    };
+    const res = await api.post<{ data: LostReportRow }>("/table/lost_reports", payload);
+    const report = toLostReport(res.data.data);
+
+    // Fire match-scoring module asynchronously; failure must not block report creation.
+    const moduleProjectId = process.env.NEXT_PUBLIC_MODULE_PROJECT_ID ?? "";
+    if (moduleProjectId) {
+      api
+        .post<{ data: ModuleRunResult }>(
+          `/modules/${moduleProjectId}/match-scoring/execute`,
+          {
+            input: { lostReportId: report.id, reporterUserId: userId },
+            triggerEventId: report.id,
+          },
+        )
+        .catch((err: unknown) => {
+          console.warn("[match-scoring] module trigger failed for report", report.id, err);
+        });
+    }
+
+    return { ...res, data: { data: report } };
+  },
+
+  update: async (id: string, data: UpdateLostReportDTO) => {
+    const payload = { ...toRowPayload(data), updated_at: new Date().toISOString() };
+    const res = await api.patch<{ data: LostReportRow }>(`/table/lost_reports/${id}`, payload);
+    return { ...res, data: { data: toLostReport(res.data.data) } };
+  },
+
+  delete: async (id: string) => {
+    return api.delete(`/table/lost_reports/${id}`);
+  },
+};

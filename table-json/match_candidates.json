@@ -1,0 +1,12 @@
+{
+  "displayName": "Match Candidates",
+  "name": "match_candidates",
+  "fields": [
+    { "name": "lost_report_id", "type": "string", "required": true, "unique": false },
+    { "name": "found_report_id", "type": "string", "required": true, "unique": false },
+    { "name": "score", "type": "number", "required": true, "unique": false },
+    { "name": "factors_json", "type": "object", "required": true, "unique": false },
+    { "name": "computed_at", "type": "date", "required": true, "unique": false },
+    { "name": "unique_pair_hash", "type": "string", "required": true, "unique": true }
+  ]
+}

@@ -1,0 +1,18 @@
+{
+  "displayName": "Found Reports",
+  "name": "found_reports",
+  "fields": [
+    { "name": "finder_user_id", "type": "string", "required": true, "unique": false },
+    { "name": "item_title", "type": "string", "required": true, "unique": false },
+    { "name": "category", "type": "string", "required": true, "unique": false },
+    { "name": "color", "type": "string", "required": false, "unique": false },
+    { "name": "brand", "type": "string", "required": false, "unique": false },
+    { "name": "description", "type": "string", "required": true, "unique": false },
+    { "name": "location_found", "type": "string", "required": true, "unique": false },
+    { "name": "date_found", "type": "date", "required": true, "unique": false },
+    { "name": "custody_location", "type": "string", "required": false, "unique": false },
+    { "name": "status", "type": "string", "required": true, "unique": false },
+    { "name": "created_at", "type": "date", "required": true, "unique": false },
+    { "name": "updated_at", "type": "date", "required": true, "unique": false }
+  ]
+}
