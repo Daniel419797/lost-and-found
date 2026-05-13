@@ -10,7 +10,7 @@ import type {
 
 type FoundReportRow = {
   id: string;
-  user_id: string;
+  finder_user_id: string;
   item_title: string;
   category: FoundReport["category"];
   color?: string;
@@ -41,7 +41,7 @@ function getCurrentUserId(): string {
 function toFoundReport(row: FoundReportRow): FoundReport {
   return {
     id: row.id,
-    userId: row.user_id,
+    userId: row.finder_user_id,
     itemTitle: row.item_title,
     category: row.category,
     color: row.color,
@@ -111,7 +111,7 @@ export const foundReportsApi = {
     const userId = getCurrentUserId();
     const payload: Partial<FoundReportRow> = {
       ...toRowPayload(data),
-      user_id: userId,
+      finder_user_id: userId,
       status: "open",
     };
     const res = await api.post<{ data: FoundReportRow }>(buildTableUrl("found_reports"), payload);

@@ -46,8 +46,12 @@ function extractProjectIdFromApiBase(base: string): string | null {
   return m?.[1] ?? null;
 }
 
+function getAuthProjectId(): string {
+  return process.env.NEXT_PUBLIC_MODULE_PROJECT_ID || extractProjectIdFromApiBase(getApiBase()) || "";
+}
+
 function withProjectId(url: string): string {
-  const projectId = extractProjectIdFromApiBase(getApiBase());
+  const projectId = getAuthProjectId();
   if (!projectId) return url;
   const sep = url.includes("?") ? "&" : "?";
   return `${url}${sep}projectId=${encodeURIComponent(projectId)}`;
@@ -56,7 +60,7 @@ function withProjectId(url: string): string {
 function oauthStartUrl(provider: "google" | "github"): string {
   const base = getApiBase();
   const redirect = typeof window !== "undefined" ? window.location.origin : "";
-  const projectId = extractProjectIdFromApiBase(base);
+  const projectId = getAuthProjectId();
   const q = new URLSearchParams();
   if (redirect) q.set("redirect", redirect);
   if (projectId) q.set("projectId", projectId);

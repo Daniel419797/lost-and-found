@@ -11,7 +11,7 @@ import type {
 
 type LostReportRow = {
   id: string;
-  user_id: string;
+  reporter_user_id: string;
   item_title: string;
   category: LostReport["category"];
   color?: string;
@@ -41,7 +41,7 @@ function getCurrentUserId(): string {
 function toLostReport(row: LostReportRow): LostReport {
   return {
     id: row.id,
-    userId: row.user_id,
+    userId: row.reporter_user_id,
     itemTitle: row.item_title,
     category: row.category,
     color: row.color,
@@ -109,7 +109,7 @@ export const lostReportsApi = {
     const userId = getCurrentUserId();
     const payload: Partial<LostReportRow> = {
       ...toRowPayload(data),
-      user_id: userId,
+      reporter_user_id: userId,
       status: "open",
     };
     const res = await api.post<{ data: LostReportRow }>(buildTableUrl("lost_reports"), payload);
