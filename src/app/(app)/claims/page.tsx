@@ -42,7 +42,7 @@ export default function ClaimsPage() {
   const fetchClaims = async () => {
     try {
       const res = isStaff
-        ? await claimsApi.list({ status: "pending" })
+        ? await claimsApi.listReviewQueue({ status: "pending" })
         : await claimsApi.listMine();
       setClaims(res.data.data);
     } catch {
@@ -57,7 +57,7 @@ export default function ClaimsPage() {
     const loadClaims = async () => {
       try {
         const res = isStaff
-          ? await claimsApi.list({ status: "pending" })
+          ? await claimsApi.listReviewQueue({ status: "pending" })
           : await claimsApi.listMine();
         if (!isMounted) return;
         setClaims(res.data.data);

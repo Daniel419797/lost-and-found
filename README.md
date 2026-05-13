@@ -31,7 +31,7 @@ npm install
 2. Configure environment in `.env.local`:
 
 ```env
-NEXT_PUBLIC_API_URL=<your-nexusforge-project-gateway>
+NEXT_PUBLIC_API_URL=<your-nexusforge-api-base-or-project-gateway>
 NEXT_PUBLIC_API_KEY=<your-api-key>
 NEXT_PUBLIC_MODULE_PROJECT_ID=<project-id-for-logic-modules>
 ```
@@ -40,7 +40,7 @@ NEXT_PUBLIC_MODULE_PROJECT_ID=<project-id-for-logic-modules>
 
 Copy `.env.example` to `.env.local` and set these values:
 
-- `NEXT_PUBLIC_API_URL`: Required. Base URL for the Nexus Forge backend API used by auth, table CRUD, and all frontend service calls.
+- `NEXT_PUBLIC_API_URL`: Required. Base URL for the Nexus Forge backend API. The app supports either the core API base (`https://.../api/v1`) or the project gateway form (`https://.../api/v1/p/<project-id>`).
 - `NEXT_PUBLIC_API_KEY`: Required. Public API key sent with every request by the shared Axios client.
 - `NEXT_PUBLIC_MODULE_PROJECT_ID`: Required for the lost-and-found workflow automations. Used when the frontend triggers the `claim-review` and `match-scoring` logic modules. If this is missing, standard CRUD still works, but those logic-module execute calls are skipped or must be passed an explicit project id by the caller.
 

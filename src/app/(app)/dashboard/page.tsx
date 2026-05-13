@@ -20,6 +20,7 @@ type Stats = {
 
 export default function DashboardPage() {
   const { user } = useAuth();
+  const isStaff = user?.role === "staff" || user?.role === "admin" || user?.role === "super_admin";
   const [stats, setStats] = useState<Stats | null>(null);
   const [recentLost, setRecentLost] = useState<LostReport[]>([]);
   const [recentFound, setRecentFound] = useState<FoundReport[]>([]);
@@ -31,7 +32,9 @@ export default function DashboardPage() {
         const [lostRes, foundRes, claimsRes] = await Promise.all([
           lostReportsApi.list({ status: "open", limit: 5 }),
           foundReportsApi.list({ status: "open", limit: 5 }),
-          claimsApi.list({ status: "pending", limit: 50 }),
+          isStaff
+            ? claimsApi.listReviewQueue({ status: "pending", limit: 50 })
+            : claimsApi.listMine({ status: "pending", limit: 50 }),
         ]);
         setStats({
           openLost: lostRes.data.total,
@@ -46,8 +49,8 @@ export default function DashboardPage() {
         setIsLoading(false);
       }
     };
-    load();
-  }, []);
+    void load();
+  }, [isStaff]);
 
   return (
     <div className="space-y-6">

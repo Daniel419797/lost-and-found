@@ -1,4 +1,5 @@
 import api from "@/lib/api";
+import { buildTableUrl } from "@/lib/project-api";
 import type {
   CreateFoundReportDTO,
   FoundReport,
@@ -84,7 +85,7 @@ export const foundReportsApi = {
     const limit = params?.limit ?? 200;
     const offset = params?.offset ?? 0;
     const res = await api.get<{ data: { rows: FoundReportRow[]; total: number } }>(
-      "/table/found_reports",
+      buildTableUrl("found_reports"),
       { params: { limit, offset } }
     );
     let rows = (res.data.data.rows ?? []).map(toFoundReport);
@@ -102,7 +103,7 @@ export const foundReportsApi = {
   },
 
   getById: async (id: string) => {
-    const res = await api.get<{ data: FoundReportRow }>(`/table/found_reports/${id}`);
+    const res = await api.get<{ data: FoundReportRow }>(buildTableUrl("found_reports", `/${id}`));
     return { ...res, data: { data: toFoundReport(res.data.data) } };
   },
 
@@ -115,17 +116,17 @@ export const foundReportsApi = {
       created_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
     };
-    const res = await api.post<{ data: FoundReportRow }>("/table/found_reports", payload);
+    const res = await api.post<{ data: FoundReportRow }>(buildTableUrl("found_reports"), payload);
     return { ...res, data: { data: toFoundReport(res.data.data) } };
   },
 
   update: async (id: string, data: UpdateFoundReportDTO) => {
     const payload = { ...toRowPayload(data), updated_at: new Date().toISOString() };
-    const res = await api.patch<{ data: FoundReportRow }>(`/table/found_reports/${id}`, payload);
+    const res = await api.patch<{ data: FoundReportRow }>(buildTableUrl("found_reports", `/${id}`), payload);
     return { ...res, data: { data: toFoundReport(res.data.data) } };
   },
 
   delete: async (id: string) => {
-    return api.delete(`/table/found_reports/${id}`);
+    return api.delete(buildTableUrl("found_reports", `/${id}`));
   },
 };

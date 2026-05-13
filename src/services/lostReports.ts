@@ -1,4 +1,5 @@
 import api from "@/lib/api";
+import { buildModuleUrl, buildTableUrl, resolveProjectId } from "@/lib/project-api";
 import type {
   CreateLostReportDTO,
   ListResponseDTO,
@@ -82,7 +83,7 @@ export const lostReportsApi = {
     const limit = params?.limit ?? 200;
     const offset = params?.offset ?? 0;
     const res = await api.get<{ data: { rows: LostReportRow[]; total: number } }>(
-      "/table/lost_reports",
+      buildTableUrl("lost_reports"),
       { params: { limit, offset } }
     );
     let rows = (res.data.data.rows ?? []).map(toLostReport);
@@ -100,7 +101,7 @@ export const lostReportsApi = {
   },
 
   getById: async (id: string) => {
-    const res = await api.get<{ data: LostReportRow }>(`/table/lost_reports/${id}`);
+    const res = await api.get<{ data: LostReportRow }>(buildTableUrl("lost_reports", `/${id}`));
     return { ...res, data: { data: toLostReport(res.data.data) } };
   },
 
@@ -117,11 +118,11 @@ export const lostReportsApi = {
     const report = toLostReport(res.data.data);
 
     // Fire match-scoring module asynchronously; failure must not block report creation.
-    const moduleProjectId = process.env.NEXT_PUBLIC_MODULE_PROJECT_ID ?? "";
+    const moduleProjectId = resolveProjectId();
     if (moduleProjectId) {
       api
         .post<{ data: ModuleRunResult }>(
-          `/modules/${moduleProjectId}/match-scoring/execute`,
+          buildModuleUrl("match-scoring", "/execute", moduleProjectId),
           {
             input: { lostReportId: report.id, reporterUserId: userId },
             triggerEventId: report.id,
@@ -137,11 +138,11 @@ export const lostReportsApi = {
 
   update: async (id: string, data: UpdateLostReportDTO) => {
     const payload = { ...toRowPayload(data), updated_at: new Date().toISOString() };
-    const res = await api.patch<{ data: LostReportRow }>(`/table/lost_reports/${id}`, payload);
+    const res = await api.patch<{ data: LostReportRow }>(buildTableUrl("lost_reports", `/${id}`), payload);
     return { ...res, data: { data: toLostReport(res.data.data) } };
   },
 
   delete: async (id: string) => {
-    return api.delete(`/table/lost_reports/${id}`);
+    return api.delete(buildTableUrl("lost_reports", `/${id}`));
   },
 };

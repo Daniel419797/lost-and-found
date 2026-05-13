@@ -1,8 +1,5 @@
 import api from "@/lib/api";
-
-function getProjectId(projectId?: string): string {
-  return projectId || process.env.NEXT_PUBLIC_MODULE_PROJECT_ID || "";
-}
+import { buildLostFoundUrl, resolveProjectId } from "@/lib/project-api";
 
 export type AuditLogRow = {
   id: string;
@@ -37,15 +34,15 @@ export const adminApi = {
     limit?: number;
     offset?: number;
   }) => {
-    const projectId = getProjectId(params?.projectId);
+    const projectId = resolveProjectId(params?.projectId);
     return api.get<{ data: { rows: AuditLogRow[]; total: number; hasMore: boolean } }>(
-      `/lost-found/${projectId}/admin/audit-logs`,
+      buildLostFoundUrl("/admin/audit-logs", projectId),
       { params },
     );
   },
 
   getMetrics: async (projectId?: string) => {
-    const resolvedProjectId = getProjectId(projectId);
-    return api.get<{ data: AdminMetrics }>(`/lost-found/${resolvedProjectId}/admin/metrics`);
+    const resolvedProjectId = resolveProjectId(projectId);
+    return api.get<{ data: AdminMetrics }>(buildLostFoundUrl("/admin/metrics", resolvedProjectId));
   },
 };

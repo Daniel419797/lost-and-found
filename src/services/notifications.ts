@@ -1,4 +1,5 @@
 import api from "@/lib/api";
+import { buildLostFoundUrl, resolveProjectId } from "@/lib/project-api";
 
 export type NotificationRow = {
   id: string;
@@ -11,31 +12,27 @@ export type NotificationRow = {
   created_at: string;
 };
 
-function getProjectId(projectId?: string): string {
-  return projectId || process.env.NEXT_PUBLIC_MODULE_PROJECT_ID || "";
-}
-
 export const notificationsApi = {
   list: async (params?: { status?: "read" | "unread" | "all"; projectId?: string }) => {
-    const projectId = getProjectId(params?.projectId);
+    const projectId = resolveProjectId(params?.projectId);
     return api.get<{ data: { rows: NotificationRow[]; total: number } }>(
-      `/lost-found/${projectId}/notifications`,
+      buildLostFoundUrl("/notifications", projectId),
       { params: { status: params?.status || "all" } },
     );
   },
 
   markRead: async (id: string, projectId?: string) => {
-    const resolvedProjectId = getProjectId(projectId);
+    const resolvedProjectId = resolveProjectId(projectId);
     return api.patch<{ data: { notification: NotificationRow; idempotent: boolean } }>(
-      `/lost-found/${resolvedProjectId}/notifications/${id}/read`,
+      buildLostFoundUrl(`/notifications/${id}/read`, resolvedProjectId),
       {},
     );
   },
 
   markAllRead: async (projectId?: string) => {
-    const resolvedProjectId = getProjectId(projectId);
+    const resolvedProjectId = resolveProjectId(projectId);
     return api.patch<{ data: { updated_count: number } }>(
-      `/lost-found/${resolvedProjectId}/notifications/mark-all-read`,
+      buildLostFoundUrl("/notifications/mark-all-read", resolvedProjectId),
       {},
     );
   },
