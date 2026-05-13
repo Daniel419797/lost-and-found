@@ -111,10 +111,8 @@ export const lostReportsApi = {
       ...toRowPayload(data),
       user_id: userId,
       status: "open",
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
     };
-    const res = await api.post<{ data: LostReportRow }>("/table/lost_reports", payload);
+    const res = await api.post<{ data: LostReportRow }>(buildTableUrl("lost_reports"), payload);
     const report = toLostReport(res.data.data);
 
     // Fire match-scoring module asynchronously; failure must not block report creation.
@@ -137,7 +135,7 @@ export const lostReportsApi = {
   },
 
   update: async (id: string, data: UpdateLostReportDTO) => {
-    const payload = { ...toRowPayload(data), updated_at: new Date().toISOString() };
+    const payload = { ...toRowPayload(data) };
     const res = await api.patch<{ data: LostReportRow }>(buildTableUrl("lost_reports", `/${id}`), payload);
     return { ...res, data: { data: toLostReport(res.data.data) } };
   },

@@ -10,7 +10,6 @@
     { "name": "completed_at", "type": "date", "required": false, "unique": false },
     { "name": "completed_by_user_id", "type": "string", "required": false, "unique": false },
     { "name": "evidence_url", "type": "string", "required": false, "unique": false },
-    { "name": "notes", "type": "string", "required": false, "unique": false },
-    { "name": "created_at", "type": "date", "required": true, "unique": false }
+    { "name": "notes", "type": "string", "required": false, "unique": false }
   ]
 }

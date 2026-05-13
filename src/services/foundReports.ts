@@ -113,15 +113,13 @@ export const foundReportsApi = {
       ...toRowPayload(data),
       user_id: userId,
       status: "open",
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
     };
     const res = await api.post<{ data: FoundReportRow }>(buildTableUrl("found_reports"), payload);
     return { ...res, data: { data: toFoundReport(res.data.data) } };
   },
 
   update: async (id: string, data: UpdateFoundReportDTO) => {
-    const payload = { ...toRowPayload(data), updated_at: new Date().toISOString() };
+    const payload = { ...toRowPayload(data) };
     const res = await api.patch<{ data: FoundReportRow }>(buildTableUrl("found_reports", `/${id}`), payload);
     return { ...res, data: { data: toFoundReport(res.data.data) } };
   },

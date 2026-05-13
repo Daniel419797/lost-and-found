@@ -10,8 +10,6 @@
     { "name": "description", "type": "string", "required": true, "unique": false },
     { "name": "location_lost", "type": "string", "required": true, "unique": false },
     { "name": "date_lost", "type": "date", "required": true, "unique": false },
-    { "name": "status", "type": "string", "required": true, "unique": false },
-    { "name": "created_at", "type": "date", "required": true, "unique": false },
-    { "name": "updated_at", "type": "date", "required": true, "unique": false }
+    { "name": "status", "type": "string", "required": true, "unique": false }
   ]
 }

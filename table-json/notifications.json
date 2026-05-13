@@ -7,7 +7,6 @@
     { "name": "title", "type": "string", "required": true, "unique": false },
     { "name": "body", "type": "string", "required": true, "unique": false },
     { "name": "is_read", "type": "boolean", "required": true, "unique": false },
-    { "name": "meta_json", "type": "object", "required": false, "unique": false },
-    { "name": "created_at", "type": "date", "required": true, "unique": false }
+    { "name": "meta_json", "type": "object", "required": false, "unique": false }
   ]
 }
