@@ -3,13 +3,13 @@ import type { Claim, ClaimStatus, CreateClaimDTO, ListResponseDTO, ModuleRunResu
 
 type ClaimRow = {
   id: string;
-  lost_report_id: string;
-  found_report_id?: string;
-  claimant_id: string;
+  linked_lost_report_id?: string;
+  found_report_id: string;
+  claimant_user_id: string;
   status: ClaimStatus;
-  description: string;
-  reviewed_by?: string;
-  review_notes?: string;
+  evidence_text: string;
+  reviewed_by_user_id?: string;
+  decision_reason?: string;
   reviewed_at?: string;
   created_at: string;
   updated_at: string;
@@ -29,16 +29,20 @@ function getCurrentUserId(): string {
   }
 }
 
+function getProjectId(projectId?: string): string {
+  return projectId || process.env.NEXT_PUBLIC_MODULE_PROJECT_ID || "";
+}
+
 function toClaim(row: ClaimRow): Claim {
   return {
     id: row.id,
-    lostReportId: row.lost_report_id,
+    lostReportId: row.linked_lost_report_id ?? "",
     foundReportId: row.found_report_id,
-    claimantId: row.claimant_id,
+    claimantId: row.claimant_user_id,
     status: row.status,
-    description: row.description,
-    reviewedBy: row.reviewed_by,
-    reviewNotes: row.review_notes,
+    description: row.evidence_text,
+    reviewedBy: row.reviewed_by_user_id,
+    reviewNotes: row.decision_reason,
     reviewedAt: row.reviewed_at,
     createdAt: row.created_at,
     updatedAt: row.updated_at,
@@ -50,10 +54,11 @@ function asListResponse(rows: Claim[], limit: number, offset: number): ListRespo
 }
 
 export const claimsApi = {
-  list: async (params?: { limit?: number; offset?: number; status?: ClaimStatus }) => {
+  list: async (params?: { limit?: number; offset?: number; status?: ClaimStatus; projectId?: string }) => {
+    const projectId = getProjectId(params?.projectId);
     const limit = params?.limit ?? 200;
     const offset = params?.offset ?? 0;
-    const res = await api.get<{ data: { rows: ClaimRow[]; total: number } }>("/table/claims", {
+    const res = await api.get<{ data: { rows: ClaimRow[]; total: number } }>(`/lost-found/${projectId}/claims/my`, {
       params: { limit, offset },
     });
     let rows = (res.data.data.rows ?? []).map(toClaim);
@@ -61,11 +66,12 @@ export const claimsApi = {
     return { ...res, data: asListResponse(rows, limit, offset) };
   },
 
-  listMine: async (params?: { limit?: number; offset?: number; status?: ClaimStatus }) => {
+  listMine: async (params?: { limit?: number; offset?: number; status?: ClaimStatus; projectId?: string }) => {
+    const projectId = getProjectId(params?.projectId);
     const userId = getCurrentUserId();
     const limit = params?.limit ?? 200;
     const offset = params?.offset ?? 0;
-    const res = await api.get<{ data: { rows: ClaimRow[]; total: number } }>("/table/claims", {
+    const res = await api.get<{ data: { rows: ClaimRow[]; total: number } }>(`/lost-found/${projectId}/claims/my`, {
       params: { limit, offset },
     });
     let rows = (res.data.data.rows ?? []).map(toClaim).filter((r) => r.claimantId === userId);
@@ -73,37 +79,38 @@ export const claimsApi = {
     return { ...res, data: asListResponse(rows, limit, offset) };
   },
 
-  getById: async (id: string) => {
-    const res = await api.get<{ data: ClaimRow }>(`/table/claims/${id}`);
+  getById: async (id: string, projectId?: string) => {
+    const resolvedProjectId = getProjectId(projectId);
+    const res = await api.get<{ data: ClaimRow }>(`/lost-found/${resolvedProjectId}/claims/${id}`);
     return { ...res, data: { data: toClaim(res.data.data) } };
   },
 
-  create: async (data: CreateClaimDTO) => {
+  create: async (data: CreateClaimDTO, projectId?: string) => {
+    const resolvedProjectId = getProjectId(projectId);
     const userId = getCurrentUserId();
-    const payload: Partial<ClaimRow> = {
-      lost_report_id: data.lostReportId,
-      found_report_id: data.foundReportId,
-      claimant_id: userId,
-      description: data.description,
-      status: "pending",
-      created_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
+    if (!data.foundReportId) {
+      throw new Error("foundReportId is required to create a claim");
+    }
+    const payload = {
+      foundReportId: data.foundReportId,
+      lostReportId: data.lostReportId,
+      evidenceText: data.description || "",
+      claimantUserId: userId,
     };
-    const res = await api.post<{ data: ClaimRow }>("/table/claims", payload);
+    const res = await api.post<{ data: ClaimRow }>(`/lost-found/${resolvedProjectId}/claims`, payload);
     return { ...res, data: { data: toClaim(res.data.data) } };
   },
 
-  review: async (id: string, data: ReviewClaimDTO) => {
+  review: async (id: string, data: ReviewClaimDTO, projectId?: string) => {
+    const resolvedProjectId = getProjectId(projectId);
     const reviewerId = getCurrentUserId();
-    const payload: Partial<ClaimRow> = {
-      status: data.status,
-      review_notes: data.reviewNotes,
-      reviewed_by: reviewerId,
-      reviewed_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
+    const payload = {
+      decision: data.status,
+      decision_reason: data.reviewNotes || "No reason provided",
+      notes: `reviewed_by=${reviewerId}`,
     };
-    const res = await api.patch<{ data: ClaimRow }>(`/table/claims/${id}`, payload);
-    return { ...res, data: { data: toClaim(res.data.data) } };
+    const res = await api.patch<{ data: { claim: ClaimRow } }>(`/lost-found/${resolvedProjectId}/claims/${id}/decision`, payload);
+    return { ...res, data: { data: toClaim(res.data.data.claim) } };
   },
 
   /**

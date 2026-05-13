@@ -13,6 +13,7 @@ test-results/
 *.log
 *.out
 *.exec.json
+*.tsbuildinfo
 .vitest*.json
 .playwright*.json
 .audit*.json

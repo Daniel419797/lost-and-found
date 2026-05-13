@@ -4,7 +4,7 @@ Production-ready Next.js frontend for a university lost-and-found system.
 
 ## Stack
 
-- Next.js 16.2.4 (App Router, Turbopack)
+- Next.js 16.2.6 (App Router, Turbopack)
 - React 19.2.4 + TypeScript
 - Tailwind CSS v4
 - shadcn/ui v4 + @base-ui/react
@@ -17,6 +17,8 @@ Production-ready Next.js frontend for a university lost-and-found system.
 - Reporting: create and list lost/found item reports
 - Search: merged lost/found browse with filters
 - Claims: student claim tracking and staff claim review workflow
+- Notifications: in-app claim and handover updates with mark-read actions
+- Admin: role-gated audit logs and operational metrics
 
 ## Run Locally
 
@@ -31,7 +33,16 @@ npm install
 ```env
 NEXT_PUBLIC_API_URL=<your-nexusforge-project-gateway>
 NEXT_PUBLIC_API_KEY=<your-api-key>
+NEXT_PUBLIC_MODULE_PROJECT_ID=<project-id-for-logic-modules>
 ```
+
+## Required Environment Variables
+
+Copy `.env.example` to `.env.local` and set these values:
+
+- `NEXT_PUBLIC_API_URL`: Required. Base URL for the Nexus Forge backend API used by auth, table CRUD, and all frontend service calls.
+- `NEXT_PUBLIC_API_KEY`: Required. Public API key sent with every request by the shared Axios client.
+- `NEXT_PUBLIC_MODULE_PROJECT_ID`: Required for the lost-and-found workflow automations. Used when the frontend triggers the `claim-review` and `match-scoring` logic modules. If this is missing, standard CRUD still works, but those logic-module execute calls are skipped or must be passed an explicit project id by the caller.
 
 3. Start development server:
 
@@ -75,18 +86,18 @@ Policy behavior:
 
 - Runs `npm run verify` (lint + production build)
 - Runs dependency audit policy (`npm audit --omit=dev --json`)
-- Fails on any high or critical vulnerability
-- Fails on moderate vulnerabilities except the currently documented upstream `postcss` advisory (`GHSA-qx2v-qp2m-jg93`)
+- Fails on any reported production dependency vulnerability
 
-## Verified Status (2026-04-28)
+## Verified Status (2026-05-13)
 
 - `npm run lint`: pass
+- `npm run typecheck`: pass
 - `npm run build`: pass
-- `npm audit --omit=dev`: one remaining moderate transitive advisory (details in `SECURITY_NOTES.md`)
+- `npm audit --omit=dev`: pass, 0 vulnerabilities
 
 ## Security Notes
 
-See `SECURITY_NOTES.md` for the current audit finding, impact, and mitigation decision.
+See `SECURITY_NOTES.md` for the current audit status and dependency policy.
 
 ## Planning and Design Artifacts
 

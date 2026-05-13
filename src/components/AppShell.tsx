@@ -4,6 +4,7 @@ import Link from "next/link";
 import { useState } from "react";
 import { usePathname, useRouter } from "next/navigation";
 import {
+  Bell,
   FileCheck,
   LayoutDashboard,
   MapPin,
@@ -11,6 +12,7 @@ import {
   Package,
   Search,
   Settings,
+  ShieldCheck,
   X,
 } from "lucide-react";
 import {
@@ -31,6 +33,8 @@ const navLinks = [
   { href: "/found-reports", label: "Found Reports", icon: Package },
   { href: "/search", label: "Browse & Search", icon: Search },
   { href: "/claims", label: "Claims", icon: FileCheck },
+  { href: "/notifications", label: "Notifications", icon: Bell },
+  { href: "/admin", label: "Admin", icon: ShieldCheck, roles: ["admin", "super_admin"] },
   { href: "/profile", label: "Profile", icon: Settings },
 ];
 
@@ -40,6 +44,8 @@ const routeTitles: Record<string, string> = {
   "/found-reports": "Found Reports",
   "/search": "Browse & Search",
   "/claims": "Claims",
+  "/notifications": "Notifications",
+  "/admin": "Admin",
   "/profile": "Profile",
 };
 
@@ -130,7 +136,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
           </div>
 
           <nav className="space-y-1 px-3 py-4">
-            {navLinks.map(({ href, label, icon: Icon }) => {
+            {navLinks.map(({ href, label, icon: Icon, roles }) => {
+              if (roles && !roles.includes(user?.role || "")) {
+                return null;
+              }
               const active = pathname === href || pathname.startsWith(href + "/");
               return (
                 <LinkButton
@@ -198,7 +207,10 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </div>
 
               <nav className="space-y-1 px-3 py-4">
-                {navLinks.map(({ href, label, icon: Icon }) => {
+                {navLinks.map(({ href, label, icon: Icon, roles }) => {
+                  if (roles && !roles.includes(user?.role || "")) {
+                    return null;
+                  }
                   const active = pathname === href || pathname.startsWith(href + "/");
                   return (
                     <LinkButton
