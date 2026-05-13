@@ -57,6 +57,11 @@ function withProjectId(url: string): string {
   return `${url}${sep}projectId=${encodeURIComponent(projectId)}`;
 }
 
+function withProjectPayload<T extends object>(payload: T): T & { projectId?: string } {
+  const projectId = getAuthProjectId();
+  return projectId ? { ...payload, projectId } : payload;
+}
+
 function oauthStartUrl(provider: "google" | "github"): string {
   const base = getApiBase();
   const redirect = typeof window !== "undefined" ? window.location.origin : "";
@@ -88,12 +93,12 @@ function toUser(u: ApiUser): User {
 export const authApi = {
   register: (data: RegisterRequestDTO) =>
     api
-      .post<{ data: ApiUser }>(withProjectId(`${getAuthApiBase()}/auth/register`), {
+      .post<{ data: ApiUser }>(withProjectId(`${getAuthApiBase()}/auth/register`), withProjectPayload({
         email: data.email,
         password: data.password,
         name: data.displayName,
         role: data.role ?? "student",
-      })
+      }))
       .then((res) => ({
         ...res,
         data: { ...res.data, data: toUser(res.data.data) },
@@ -103,7 +108,7 @@ export const authApi = {
     api
       .post<{ data: { token?: string; accessToken?: string; user: ApiUser } }>(
         withProjectId(`${getAuthApiBase()}/auth/login`),
-        data,
+        withProjectPayload(data),
       )
       .then((res) => ({
         ...res,
