@@ -99,30 +99,30 @@ function SidebarContent({
   const { user } = useAuth();
 
   return (
-    <div className="flex min-h-full flex-col px-5 py-8">
-      <div className="flex items-start gap-4">
+    <div className="flex min-h-full flex-col px-4 py-6">
+      <div className="flex items-start gap-3">
         <UserMenu onLogout={onLogout} className="mt-1" />
         <Link href="/dashboard" onClick={onNavigate} className="block min-w-0">
-          <span className="block font-heading text-[1.7rem] font-bold leading-[1.08] tracking-normal text-[#101417]">
+          <span className="block font-heading text-[1.35rem] font-bold leading-[1.08] tracking-normal text-[#101417]">
             Campus Lost &amp;
           </span>
-          <span className="block font-heading text-[1.7rem] font-bold leading-[1.08] tracking-normal text-[#101417]">
+          <span className="block font-heading text-[1.35rem] font-bold leading-[1.08] tracking-normal text-[#101417]">
             Found
           </span>
-          <span className="mt-1 block text-lg leading-6 text-[#273235]">Institutional Recovery</span>
+          <span className="mt-1 block text-sm leading-5 text-[#273235]">Institutional Recovery</span>
         </Link>
       </div>
 
       <Link
         href="/lost-reports/new"
         onClick={onNavigate}
-        className="mt-14 inline-flex h-[54px] items-center justify-center gap-3 rounded-lg bg-[#007a6c] px-5 text-lg font-bold text-white shadow-sm transition hover:bg-[#006e62]"
+        className="mt-9 inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-[#007a6c] px-4 text-base font-bold text-white shadow-sm transition hover:bg-[#006e62]"
       >
-        <CirclePlus className="size-6" />
+        <CirclePlus className="size-5" />
         Report Item
       </Link>
 
-      <nav className="mt-10 space-y-3">
+      <nav className="mt-7 space-y-2">
         {navLinks.map(({ href, label, icon: Icon, roles }) => {
           if (roles && !roles.includes(user?.role || "")) {
             return null;
@@ -134,33 +134,33 @@ function SidebarContent({
               href={href}
               onClick={onNavigate}
               className={cn(
-                "flex h-[54px] items-center gap-5 rounded-lg px-6 text-lg font-medium text-[#182224] transition",
+                "flex h-11 items-center gap-3 rounded-lg px-4 text-base font-medium text-[#182224] transition",
                 active
                   ? "bg-[#078d80] font-semibold text-white"
                   : "hover:bg-white/70 hover:text-[#006d62]",
               )}
             >
-              <Icon className="size-6 shrink-0" strokeWidth={2.3} />
+              <Icon className="size-5 shrink-0" strokeWidth={2.3} />
               {label}
             </Link>
           );
         })}
       </nav>
 
-      <div className="mt-auto border-t border-[#b7c5c3] pt-7">
+      <div className="mt-auto border-t border-[#b7c5c3] pt-5">
         <Link
           href="/profile"
           onClick={onNavigate}
-          className="flex h-[48px] items-center gap-5 rounded-lg px-6 text-lg font-medium text-[#273235] transition hover:bg-white/70 hover:text-[#006d62]"
+          className="flex h-10 items-center gap-3 rounded-lg px-4 text-base font-medium text-[#273235] transition hover:bg-white/70 hover:text-[#006d62]"
         >
-          <Settings className="size-6" />
+          <Settings className="size-5" />
           Settings
         </Link>
         <a
           href="mailto:help@campuslostfound.local"
-          className="mt-2 flex h-[48px] items-center gap-5 rounded-lg px-6 text-lg font-medium text-[#273235] transition hover:bg-white/70 hover:text-[#006d62]"
+          className="mt-1 flex h-10 items-center gap-3 rounded-lg px-4 text-base font-medium text-[#273235] transition hover:bg-white/70 hover:text-[#006d62]"
         >
-          <CircleHelp className="size-6" />
+          <CircleHelp className="size-5" />
           Help
         </a>
       </div>
@@ -183,9 +183,9 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   const closeMobileSidebar = () => setIsMobileSidebarOpen(false);
 
   return (
-    <div className="min-h-screen bg-[#f7f8f8] text-[#101417]">
-      <div className="grid min-h-screen w-full lg:grid-cols-[325px_minmax(0,1fr)]">
-        <aside className="hidden min-h-screen border-r border-[#b7c5c3] bg-[#e9ecec] lg:flex lg:flex-col">
+    <div className="lf-compact min-h-screen bg-[#f7f8f8] text-[#101417]">
+      <div className="grid min-h-screen w-full lg:grid-cols-[280px_minmax(0,1fr)]">
+        <aside className="sticky top-0 hidden h-screen overflow-hidden border-r border-[#b7c5c3] bg-[#e9ecec] lg:flex lg:flex-col">
           <SidebarContent onLogout={handleLogout} />
         </aside>
 
@@ -202,7 +202,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               className="absolute inset-0 bg-black/40"
               aria-label="Close navigation menu"
             />
-            <aside className="relative z-10 flex h-[100dvh] max-h-[100dvh] w-[86vw] max-w-[325px] flex-col overflow-y-auto border-r border-[#b7c5c3] bg-[#e9ecec]">
+            <aside className="relative z-10 flex h-[100dvh] max-h-[100dvh] w-[82vw] max-w-[280px] flex-col overflow-hidden border-r border-[#b7c5c3] bg-[#e9ecec]">
               <button
                 type="button"
                 onClick={closeMobileSidebar}
@@ -244,7 +244,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
             </Link>
           </header>
 
-          <main className="min-w-0 px-5 py-7 sm:px-8 lg:px-[30px] lg:py-[30px]">{children}</main>
+          <main className="min-w-0 px-4 py-5 sm:px-6 lg:px-6 lg:py-6">{children}</main>
         </div>
       </div>
     </div>
