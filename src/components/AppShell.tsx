@@ -41,7 +41,9 @@ const navLinks = [
 const routeTitles: Record<string, string> = {
   "/dashboard": "Dashboard",
   "/lost-reports": "Lost Reports",
+  "/lost-reports/new": "Report Lost Item",
   "/found-reports": "Found Reports",
+  "/found-reports/new": "Report Found Item",
   "/search": "Browse & Search",
   "/claims": "Claims",
   "/notifications": "Notifications",
@@ -112,7 +114,7 @@ function SidebarContent({
       </div>
 
       <Link
-        href="/lost-reports"
+        href="/lost-reports/new"
         onClick={onNavigate}
         className="mt-14 inline-flex h-[54px] items-center justify-center gap-3 rounded-lg bg-[#007a6c] px-5 text-lg font-bold text-white shadow-sm transition hover:bg-[#006e62]"
       >
@@ -234,7 +236,7 @@ export function AppShell({ children }: { children: React.ReactNode }) {
               </div>
             </div>
             <Link
-              href="/lost-reports"
+              href="/lost-reports/new"
               className="inline-flex size-10 items-center justify-center rounded-md bg-[#007a6c] text-white"
               aria-label="Report item"
             >

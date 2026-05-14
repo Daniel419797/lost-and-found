@@ -46,8 +46,8 @@ function toClaim(row: ClaimRow): Claim {
   };
 }
 
-function asListResponse(rows: Claim[], limit: number, offset: number): ListResponseDTO<Claim> {
-  return { data: rows, total: rows.length, limit, offset };
+function asListResponse(rows: Claim[], limit: number, offset: number, total = rows.length): ListResponseDTO<Claim> {
+  return { data: rows, total, limit, offset };
 }
 
 export const claimsApi = {
@@ -56,24 +56,23 @@ export const claimsApi = {
     const limit = params?.limit ?? 200;
     const offset = params?.offset ?? 0;
     const res = await api.get<{ data: { rows: ClaimRow[]; total: number } }>(buildLostFoundUrl("/claims/my", projectId), {
-      params: { limit, offset },
+      params: { limit, offset, ...(params?.status ? { status: params.status } : {}) },
     });
     let rows = (res.data.data.rows ?? []).map(toClaim);
     if (params?.status) rows = rows.filter((r) => r.status === params.status);
-    return { ...res, data: asListResponse(rows, limit, offset) };
+    return { ...res, data: asListResponse(rows, limit, offset, res.data.data.total ?? rows.length) };
   },
 
   listMine: async (params?: { limit?: number; offset?: number; status?: ClaimStatus; projectId?: string }) => {
     const projectId = resolveProjectId(params?.projectId);
-    const userId = getCurrentUserId();
     const limit = params?.limit ?? 200;
     const offset = params?.offset ?? 0;
     const res = await api.get<{ data: { rows: ClaimRow[]; total: number } }>(buildLostFoundUrl("/claims/my", projectId), {
-      params: { limit, offset },
+      params: { limit, offset, ...(params?.status ? { status: params.status } : {}) },
     });
-    let rows = (res.data.data.rows ?? []).map(toClaim).filter((r) => r.claimantId === userId);
+    let rows = (res.data.data.rows ?? []).map(toClaim);
     if (params?.status) rows = rows.filter((r) => r.status === params.status);
-    return { ...res, data: asListResponse(rows, limit, offset) };
+    return { ...res, data: asListResponse(rows, limit, offset, res.data.data.total ?? rows.length) };
   },
 
   listReviewQueue: async (params?: { limit?: number; offset?: number; status?: string; projectId?: string }) => {
@@ -87,7 +86,7 @@ export const claimsApi = {
       }
     );
     const rows = (res.data.data.rows ?? []).map(toClaim);
-    return { ...res, data: asListResponse(rows, limit, offset) };
+    return { ...res, data: asListResponse(rows, limit, offset, res.data.data.total ?? rows.length) };
   },
 
   getById: async (id: string, projectId?: string) => {

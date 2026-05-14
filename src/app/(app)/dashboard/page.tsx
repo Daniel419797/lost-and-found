@@ -338,14 +338,14 @@ export default function DashboardPage() {
             </h2>
             <div className="mt-6 space-y-4">
               <Link
-                href="/found-reports"
+                href="/found-reports/new"
                 className="flex h-[52px] items-center justify-center gap-3 rounded-lg bg-[#007a6c] text-lg font-bold text-white transition hover:bg-[#006e62]"
               >
                 <CirclePlusIcon />
                 Report Found Item
               </Link>
               <Link
-                href="/lost-reports"
+                href="/lost-reports/new"
                 className="flex h-[52px] items-center justify-center gap-3 rounded-lg border border-[#b8c6c4] bg-white text-lg font-bold text-[#101417] transition hover:border-[#007a6c] hover:text-[#006d62]"
               >
                 <Search className="size-5" />

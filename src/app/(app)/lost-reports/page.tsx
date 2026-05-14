@@ -1,7 +1,12 @@
 "use client";
 
+import Link from "next/link";
 import type { ComponentType, ReactNode } from "react";
 import { useEffect, useMemo, useState } from "react";
+import { useForm } from "react-hook-form";
+import type { Resolver } from "react-hook-form";
+import { zodResolver } from "@hookform/resolvers/zod";
+import { z } from "zod";
 import { format } from "date-fns";
 import {
   BookOpen,
@@ -16,6 +21,7 @@ import {
   MapPin,
   Package,
   PackageCheck,
+  Plus,
   Search,
   Shirt,
   Trophy,
@@ -24,14 +30,32 @@ import {
 import { toast } from "sonner";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Form,
+  FormControl,
+  FormField,
+  FormItem,
+  FormLabel,
+  FormMessage,
+} from "@/components/ui/form";
 import {
   Select,
   SelectContent,
   SelectItem,
   SelectTrigger,
+  SelectValue,
 } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { lostReportsApi } from "@/services/lostReports";
+import { uploadsApi } from "@/services/uploads";
 import { cn } from "@/lib/utils";
 import type { ItemCategory, LostReport, LostReportStatus } from "@/types";
 
@@ -54,6 +78,32 @@ const STATUS_OPTIONS: { value: LostReportStatus; label: string }[] = [
   { value: "recovered", label: "Found" },
   { value: "closed_unrecovered", label: "Closed" },
 ];
+
+const ACCEPTED_PHOTO_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
+
+const lostReportSchema = z.object({
+  itemTitle: z.string().min(1, "Item title is required").max(200),
+  category: z.enum([
+    "Electronics",
+    "Clothing",
+    "Accessories",
+    "Documents",
+    "Keys",
+    "Bags",
+    "Sports",
+    "Books",
+    "Food",
+    "Other",
+  ]),
+  color: z.string().max(50).optional(),
+  brand: z.string().max(100).optional(),
+  description: z.string().min(1, "Description is required").max(1000),
+  locationLost: z.string().min(1, "Location is required").max(300),
+  dateLost: z.string().min(1, "Date is required"),
+});
+
+type LostReportFormValues = z.infer<typeof lostReportSchema>;
 
 type ReportVisual = {
   Icon: ComponentType<{ className?: string; strokeWidth?: number }>;
@@ -101,15 +151,44 @@ function StatusIcon({ status }: { status: LostReportStatus }) {
 export default function LostReportsPage() {
   const [reports, setReports] = useState<LostReport[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isReportDialogOpen, setIsReportDialogOpen] = useState(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [selectedPhoto, setSelectedPhoto] = useState<File | null>(null);
+  const [photoInputKey, setPhotoInputKey] = useState(0);
   const [search, setSearch] = useState("");
   const [category, setCategory] = useState<"all" | ItemCategory>("all");
   const [status, setStatus] = useState<"all" | LostReportStatus>("all");
   const [date, setDate] = useState("");
 
+  const form = useForm<LostReportFormValues>({
+    resolver: zodResolver(lostReportSchema) as Resolver<LostReportFormValues>,
+    defaultValues: {
+      itemTitle: "",
+      category: "Other",
+      color: "",
+      brand: "",
+      description: "",
+      locationLost: "",
+      dateLost: "",
+    },
+  });
+
+  const loadReports = async () => {
+    setIsLoading(true);
+    try {
+      const res = await lostReportsApi.list({ limit: 200 });
+      setReports(res.data.data);
+    } catch {
+      toast.error("Failed to load lost reports.");
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   useEffect(() => {
     let isMounted = true;
 
-    const loadReports = async () => {
+    const loadInitialReports = async () => {
       setIsLoading(true);
       try {
         const res = await lostReportsApi.list({ limit: 200 });
@@ -123,12 +202,77 @@ export default function LostReportsPage() {
       }
     };
 
-    void loadReports();
+    void loadInitialReports();
 
     return () => {
       isMounted = false;
     };
   }, []);
+
+  const resetPhotoInput = () => {
+    setSelectedPhoto(null);
+    setPhotoInputKey((key) => key + 1);
+  };
+
+  const handlePhotoSelected = (file: File | null) => {
+    if (!file) {
+      setSelectedPhoto(null);
+      return;
+    }
+
+    if (!ACCEPTED_PHOTO_TYPES.has(file.type)) {
+      toast.error("Photo must be a JPEG, PNG, or WebP image.");
+      resetPhotoInput();
+      return;
+    }
+
+    if (file.size > MAX_PHOTO_BYTES) {
+      toast.error("Photo must be 5MB or smaller.");
+      resetPhotoInput();
+      return;
+    }
+
+    setSelectedPhoto(file);
+  };
+
+  const onSubmit = async (values: LostReportFormValues) => {
+    setIsSubmitting(true);
+    try {
+      const uploadedPhoto = selectedPhoto ? await uploadsApi.uploadItemPhoto(selectedPhoto) : null;
+
+      await lostReportsApi.create({
+        itemTitle: values.itemTitle,
+        category: values.category,
+        color: values.color || undefined,
+        brand: values.brand || undefined,
+        description: values.description,
+        imageUrls: uploadedPhoto ? [uploadedPhoto.url] : undefined,
+        locationLost: values.locationLost,
+        dateLost: values.dateLost,
+      });
+
+      toast.success("Lost report submitted.");
+      form.reset();
+      resetPhotoInput();
+      setIsReportDialogOpen(false);
+      await loadReports();
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+        "Failed to submit report. Please try again.";
+      toast.error(msg);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const closeReportDialog = (open: boolean) => {
+    setIsReportDialogOpen(open);
+    if (!open && !isSubmitting) {
+      form.reset();
+      resetPhotoInput();
+    }
+  };
 
   const filteredReports = useMemo(() => {
     const term = search.trim().toLowerCase();
@@ -157,9 +301,24 @@ export default function LostReportsPage() {
 
   return (
     <div className="mx-auto max-w-[1220px]">
-      <h1 className="font-heading text-[2.7rem] font-bold leading-none tracking-normal text-[#101417]">
-        Lost Reports
-      </h1>
+      <div className="flex flex-col gap-5 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="font-heading text-[2.7rem] font-bold leading-none tracking-normal text-[#101417]">
+            Lost Reports
+          </h1>
+          <p className="mt-3 text-lg text-[#505a5c]">
+            Report missing items with a photo so matches are easier to verify.
+          </p>
+        </div>
+
+        <Link
+          href="/lost-reports/new"
+          className="inline-flex h-12 items-center justify-center rounded-lg bg-[#007a6c] px-5 text-base font-bold text-white transition hover:bg-[#006e62]"
+        >
+          <Plus className="mr-2 size-5" />
+          Report Lost Item
+        </Link>
+      </div>
 
       <section className="mt-9 rounded-xl border border-[#e3e7e6] bg-white p-6 shadow-sm">
         <label className="relative block">
@@ -237,6 +396,167 @@ export default function LostReportsPage() {
           filteredReports.map((report) => <ReportCard key={report.id} report={report} />)
         )}
       </section>
+
+      <Dialog open={isReportDialogOpen} onOpenChange={closeReportDialog}>
+        <DialogContent className="max-h-[92vh] overflow-y-auto bg-white p-6 sm:max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-bold text-[#101417]">Report Lost Item</DialogTitle>
+            <DialogDescription>
+              Add clear details and an optional photo to help staff and finders identify the item.
+            </DialogDescription>
+          </DialogHeader>
+
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+              <FormField
+                control={form.control}
+                name="itemTitle"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Item Title *</FormLabel>
+                    <FormControl>
+                      <Input placeholder="e.g. Blue laptop bag" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <FormField
+                  control={form.control}
+                  name="category"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Category *</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select category" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {CATEGORIES.map((item) => (
+                            <SelectItem key={item} value={item}>
+                              {item}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="dateLost"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Date Lost *</FormLabel>
+                      <FormControl>
+                        <Input type="date" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <div className="grid gap-4 sm:grid-cols-2">
+                <FormField
+                  control={form.control}
+                  name="color"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Color</FormLabel>
+                      <FormControl>
+                        <Input placeholder="e.g. Navy" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="brand"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Brand</FormLabel>
+                      <FormControl>
+                        <Input placeholder="e.g. Jansport" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+
+              <FormField
+                control={form.control}
+                name="locationLost"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Location Lost *</FormLabel>
+                    <FormControl>
+                      <Input placeholder="e.g. Library 2nd Floor" {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <FormField
+                control={form.control}
+                name="description"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Description *</FormLabel>
+                    <FormControl>
+                      <Textarea
+                        placeholder="Distinguishing marks, contents, stickers, serial number, or anything only the owner would know."
+                        rows={4}
+                        {...field}
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <div className="flex flex-col gap-2">
+                <label className="text-sm font-medium text-[#182224]">Item Photo</label>
+                <Input
+                  key={photoInputKey}
+                  accept="image/jpeg,image/png,image/webp"
+                  type="file"
+                  onChange={(event) => handlePhotoSelected(event.target.files?.[0] ?? null)}
+                />
+                {selectedPhoto && (
+                  <p className="truncate text-xs text-muted-foreground">{selectedPhoto.name}</p>
+                )}
+              </div>
+
+              <div className="flex flex-col-reverse gap-3 border-t border-[#e0e5e4] pt-5 sm:flex-row sm:justify-end">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => closeReportDialog(false)}
+                  disabled={isSubmitting}
+                >
+                  Cancel
+                </Button>
+                <Button
+                  type="submit"
+                  disabled={isSubmitting}
+                  className="bg-[#007a6c] text-white hover:bg-[#006e62]"
+                >
+                  {isSubmitting ? "Submitting..." : "Submit Lost Report"}
+                </Button>
+              </div>
+            </form>
+          </Form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

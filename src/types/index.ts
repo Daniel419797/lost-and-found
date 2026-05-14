@@ -158,7 +158,7 @@ export interface ModuleRunResult {
 
 // ─── Claims ───────────────────────────────────────────────────────────────────
 
-export type ClaimStatus = "pending" | "approved" | "rejected" | "completed";
+export type ClaimStatus = "pending" | "under_review" | "approved" | "rejected" | "completed";
 
 export interface Claim {
   id: string;
@@ -175,8 +175,8 @@ export interface Claim {
 }
 
 export interface CreateClaimDTO {
-  lostReportId: string;
-  foundReportId?: string;
+  lostReportId?: string;
+  foundReportId: string;
   description?: string;
 }
 
@@ -202,8 +202,12 @@ export interface Handover {
   id: string;
   claimId: string;
   officerUserId: string;
+  status?: string;
   handoverPoint: string;
   handoverTime: string;
+  completedAt?: string;
+  completedByUserId?: string;
+  evidenceUrl?: string;
   notes?: string;
   createdAt: string;
 }
