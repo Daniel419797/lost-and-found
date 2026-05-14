@@ -16,6 +16,7 @@ type FoundReportRow = {
   color?: string;
   brand?: string;
   description?: string;
+  image_urls?: string[];
   location_found: string;
   date_found: string;
   custody_location?: string;
@@ -47,6 +48,9 @@ function toFoundReport(row: FoundReportRow): FoundReport {
     color: row.color,
     brand: row.brand,
     description: row.description,
+    imageUrls: Array.isArray(row.image_urls)
+      ? row.image_urls.filter((value): value is string => typeof value === "string")
+      : undefined,
     locationFound: row.location_found,
     dateFound: row.date_found,
     custodyLocation: row.custody_location,
@@ -65,6 +69,7 @@ function toRowPayload(
   if (data.color !== undefined) p.color = data.color;
   if (data.brand !== undefined) p.brand = data.brand;
   if (data.description !== undefined) p.description = data.description;
+  if (data.imageUrls !== undefined) p.image_urls = data.imageUrls;
   if (data.locationFound !== undefined) p.location_found = data.locationFound;
   if (data.dateFound !== undefined) p.date_found = data.dateFound;
   if (data.custodyLocation !== undefined) p.custody_location = data.custodyLocation;

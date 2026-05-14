@@ -73,6 +73,7 @@ export interface LostReport {
   color?: string;
   brand?: string;
   description?: string;
+  imageUrls?: string[];
   locationLost: string;
   dateLost: string;
   status: LostReportStatus;
@@ -86,6 +87,7 @@ export interface CreateLostReportDTO {
   color?: string;
   brand?: string;
   description?: string;
+  imageUrls?: string[];
   locationLost: string;
   dateLost: string;
 }
@@ -113,6 +115,7 @@ export interface FoundReport {
   color?: string;
   brand?: string;
   description?: string;
+  imageUrls?: string[];
   locationFound: string;
   dateFound: string;
   custodyLocation?: string;
@@ -127,6 +130,7 @@ export interface CreateFoundReportDTO {
   color?: string;
   brand?: string;
   description?: string;
+  imageUrls?: string[];
   locationFound: string;
   dateFound: string;
   custodyLocation?: string;

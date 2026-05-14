@@ -17,6 +17,7 @@ type LostReportRow = {
   color?: string;
   brand?: string;
   description?: string;
+  image_urls?: string[];
   location_lost: string;
   date_lost: string;
   status: LostReport["status"];
@@ -47,6 +48,9 @@ function toLostReport(row: LostReportRow): LostReport {
     color: row.color,
     brand: row.brand,
     description: row.description,
+    imageUrls: Array.isArray(row.image_urls)
+      ? row.image_urls.filter((value): value is string => typeof value === "string")
+      : undefined,
     locationLost: row.location_lost,
     dateLost: row.date_lost,
     status: row.status,
@@ -64,6 +68,7 @@ function toRowPayload(
   if (data.color !== undefined) p.color = data.color;
   if (data.brand !== undefined) p.brand = data.brand;
   if (data.description !== undefined) p.description = data.description;
+  if (data.imageUrls !== undefined) p.image_urls = data.imageUrls;
   if (data.locationLost !== undefined) p.location_lost = data.locationLost;
   if (data.dateLost !== undefined) p.date_lost = data.dateLost;
   if ("status" in data && data.status !== undefined) p.status = data.status;

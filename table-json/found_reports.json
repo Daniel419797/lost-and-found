@@ -8,6 +8,7 @@
     { "name": "color", "type": "string", "required": false, "unique": false },
     { "name": "brand", "type": "string", "required": false, "unique": false },
     { "name": "description", "type": "string", "required": true, "unique": false },
+    { "name": "image_urls", "type": "array", "required": false, "unique": false },
     { "name": "location_found", "type": "string", "required": true, "unique": false },
     { "name": "date_found", "type": "date", "required": true, "unique": false },
     { "name": "custody_location", "type": "string", "required": false, "unique": false },

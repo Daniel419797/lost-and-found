@@ -48,6 +48,10 @@ api.interceptors.request.use((config) => {
   if (typeof window !== "undefined") {
     void wakeBackendOnce();
   }
+  if (typeof FormData !== "undefined" && config.data instanceof FormData) {
+    delete config.headers["Content-Type"];
+    delete config.headers["content-type"];
+  }
   const apiKey = process.env.NEXT_PUBLIC_API_KEY;
   if (apiKey) {
     config.headers["x-api-key"] = apiKey;

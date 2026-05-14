@@ -7,6 +7,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import { Building2, MapPin, Package } from "lucide-react";
 import {
   Form,
   FormControl,
@@ -29,6 +30,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { foundReportsApi } from "@/services/foundReports";
+import { uploadsApi } from "@/services/uploads";
 import type { FoundReport, ItemCategory } from "@/types";
 
 const CATEGORIES: ItemCategory[] = [
@@ -50,6 +52,9 @@ const STATUS_COLORS: Record<FoundReport["status"], string> = {
   verified: "bg-green-100 text-green-800",
   closed: "bg-gray-100 text-gray-600",
 };
+
+const ACCEPTED_PHOTO_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
 
 const schema = z.object({
   itemTitle: z.string().min(1, "Item title is required").max(200),
@@ -79,6 +84,8 @@ export default function FoundReportsPage() {
   const [reports, setReports] = useState<FoundReport[]>([]);
   const [isLoadingList, setIsLoadingList] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [selectedPhoto, setSelectedPhoto] = useState<File | null>(null);
+  const [photoInputKey, setPhotoInputKey] = useState(0);
 
   const form = useForm<FormValues>({
     resolver: zodResolver(schema) as Resolver<FormValues>,
@@ -126,21 +133,51 @@ export default function FoundReportsPage() {
     };
   }, []);
 
+  const resetPhotoInput = () => {
+    setSelectedPhoto(null);
+    setPhotoInputKey((key) => key + 1);
+  };
+
+  const handlePhotoSelected = (file: File | null) => {
+    if (!file) {
+      setSelectedPhoto(null);
+      return;
+    }
+
+    if (!ACCEPTED_PHOTO_TYPES.has(file.type)) {
+      toast.error("Photo must be a JPEG, PNG, or WebP image.");
+      resetPhotoInput();
+      return;
+    }
+
+    if (file.size > MAX_PHOTO_BYTES) {
+      toast.error("Photo must be 5MB or smaller.");
+      resetPhotoInput();
+      return;
+    }
+
+    setSelectedPhoto(file);
+  };
+
   const onSubmit = async (values: FormValues) => {
     setIsSubmitting(true);
     try {
+      const uploadedPhoto = selectedPhoto ? await uploadsApi.uploadItemPhoto(selectedPhoto) : null;
+
       await foundReportsApi.create({
         itemTitle: values.itemTitle,
         category: values.category,
         color: values.color || undefined,
         brand: values.brand || undefined,
         description: values.description || undefined,
+        imageUrls: uploadedPhoto ? [uploadedPhoto.url] : undefined,
         locationFound: values.locationFound,
         dateFound: values.dateFound,
         custodyLocation: values.custodyLocation || undefined,
       });
       toast.success("Found report submitted!");
       form.reset();
+      resetPhotoInput();
       await fetchReports();
     } catch (err: unknown) {
       const msg =
@@ -162,7 +199,6 @@ export default function FoundReportsPage() {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[1fr_1.2fr]">
-        {/* Submit form */}
         <Card>
           <CardHeader>
             <CardTitle>Report a Found Item</CardTitle>
@@ -189,16 +225,16 @@ export default function FoundReportsPage() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel>Category *</FormLabel>
-                      <Select onValueChange={field.onChange} defaultValue={field.value}>
+                      <Select onValueChange={field.onChange} value={field.value}>
                         <FormControl>
                           <SelectTrigger>
                             <SelectValue placeholder="Select category" />
                           </SelectTrigger>
                         </FormControl>
                         <SelectContent>
-                          {CATEGORIES.map((c) => (
-                            <SelectItem key={c} value={c}>
-                              {c}
+                          {CATEGORIES.map((category) => (
+                            <SelectItem key={category} value={category}>
+                              {category}
                             </SelectItem>
                           ))}
                         </SelectContent>
@@ -243,7 +279,7 @@ export default function FoundReportsPage() {
                       <FormLabel>Description</FormLabel>
                       <FormControl>
                         <Textarea
-                          placeholder="Distinguishing features, serial numbers, etc.…"
+                          placeholder="Distinguishing features, serial numbers, etc..."
                           rows={3}
                           {...field}
                         />
@@ -252,6 +288,20 @@ export default function FoundReportsPage() {
                     </FormItem>
                   )}
                 />
+                <FormItem>
+                  <FormLabel>Item Photo</FormLabel>
+                  <FormControl>
+                    <Input
+                      key={photoInputKey}
+                      accept="image/jpeg,image/png,image/webp"
+                      type="file"
+                      onChange={(event) => handlePhotoSelected(event.target.files?.[0] ?? null)}
+                    />
+                  </FormControl>
+                  {selectedPhoto && (
+                    <p className="truncate text-xs text-muted-foreground">{selectedPhoto.name}</p>
+                  )}
+                </FormItem>
                 <FormField
                   control={form.control}
                   name="locationFound"
@@ -292,20 +342,19 @@ export default function FoundReportsPage() {
                   )}
                 />
                 <Button type="submit" className="w-full" disabled={isSubmitting}>
-                  {isSubmitting ? "Submitting…" : "Submit Found Report"}
+                  {isSubmitting ? "Submitting..." : "Submit Found Report"}
                 </Button>
               </form>
             </Form>
           </CardContent>
         </Card>
 
-        {/* Reports list */}
         <div className="space-y-3">
           <h2 className="text-lg font-semibold">My Found Reports</h2>
           {isLoadingList ? (
             <div className="space-y-3">
-              {[1, 2, 3].map((i) => (
-                <Skeleton key={i} className="h-24 w-full rounded-xl" />
+              {[1, 2, 3].map((item) => (
+                <Skeleton key={item} className="h-24 w-full rounded-xl" />
               ))}
             </div>
           ) : reports.length === 0 ? (
@@ -315,38 +364,53 @@ export default function FoundReportsPage() {
           ) : (
             <div className="space-y-3">
               {reports.map((report) => (
-                <div
-                  key={report.id}
-                  className="rounded-xl border bg-background p-4 shadow-sm space-y-1"
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <p className="font-semibold">{report.itemTitle}</p>
-                    <Badge
-                      variant="secondary"
-                      className={STATUS_COLORS[report.status]}
-                    >
-                      {report.status}
-                    </Badge>
-                  </div>
-                  <p className="text-sm text-muted-foreground">
-                    {report.category}
-                    {report.color ? ` · ${report.color}` : ""}
-                    {report.brand ? ` · ${report.brand}` : ""}
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    📍 {report.locationFound} &nbsp;·&nbsp;{" "}
-                    {format(new Date(report.dateFound), "dd MMM yyyy")}
-                  </p>
-                  {report.custodyLocation && (
-                    <p className="text-xs text-muted-foreground">
-                      🏢 Custody: {report.custodyLocation}
-                    </p>
-                  )}
-                </div>
+                <FoundReportListItem key={report.id} report={report} />
               ))}
             </div>
           )}
         </div>
+      </div>
+    </div>
+  );
+}
+
+function FoundReportListItem({ report }: { report: FoundReport }) {
+  const photoUrl = report.imageUrls?.find(Boolean);
+
+  return (
+    <div className="flex gap-4 rounded-xl border bg-background p-4 shadow-sm">
+      <div
+        aria-label={photoUrl ? `${report.itemTitle} photo` : "Item photo placeholder"}
+        className="flex h-24 w-24 shrink-0 items-center justify-center rounded-lg bg-muted bg-cover bg-center text-muted-foreground"
+        role="img"
+        style={photoUrl ? { backgroundImage: `url(${JSON.stringify(photoUrl)})` } : undefined}
+      >
+        {!photoUrl && <Package className="size-8" />}
+      </div>
+      <div className="min-w-0 flex-1 space-y-1">
+        <div className="flex items-start justify-between gap-2">
+          <p className="truncate font-semibold">{report.itemTitle}</p>
+          <Badge variant="secondary" className={STATUS_COLORS[report.status]}>
+            {report.status}
+          </Badge>
+        </div>
+        <p className="text-sm text-muted-foreground">
+          {report.category}
+          {report.color ? ` - ${report.color}` : ""}
+          {report.brand ? ` - ${report.brand}` : ""}
+        </p>
+        <p className="flex items-center gap-1.5 text-sm text-muted-foreground">
+          <MapPin className="size-4 shrink-0" />
+          <span className="min-w-0 truncate">{report.locationFound}</span>
+          <span className="shrink-0">-</span>
+          <span className="shrink-0">{format(new Date(report.dateFound), "dd MMM yyyy")}</span>
+        </p>
+        {report.custodyLocation && (
+          <p className="flex items-center gap-1.5 text-xs text-muted-foreground">
+            <Building2 className="size-3.5 shrink-0" />
+            <span className="min-w-0 truncate">Custody: {report.custodyLocation}</span>
+          </p>
+        )}
       </div>
     </div>
   );
