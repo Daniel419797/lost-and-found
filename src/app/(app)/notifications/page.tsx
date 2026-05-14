@@ -10,6 +10,7 @@ import {
   CheckCircle2,
   Handshake,
   Network,
+  RefreshCw,
   Search,
   UserCircle,
 } from "lucide-react";
@@ -62,19 +63,28 @@ function getClaimHref(row: NotificationRow) {
 export default function NotificationsPage() {
   const [rows, setRows] = useState<NotificationRow[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [activeFilter, setActiveFilter] = useState<FilterKey>("all");
   const [search, setSearch] = useState("");
 
-  const load = useCallback(async () => {
-    setIsLoading(true);
+  const load = useCallback(async (mode: "initial" | "refresh" = "initial") => {
+    if (mode === "refresh") {
+      setIsRefreshing(true);
+    } else {
+      setIsLoading(true);
+    }
     try {
       const res = await notificationsApi.list({ status: "all" });
       setRows(res.data.data.rows || []);
     } catch {
       toast.error("Failed to load notifications.");
     } finally {
-      setIsLoading(false);
+      if (mode === "refresh") {
+        setIsRefreshing(false);
+      } else {
+        setIsLoading(false);
+      }
     }
   }, []);
 
@@ -130,6 +140,10 @@ export default function NotificationsPage() {
     }
   };
 
+  const handleRefresh = async () => {
+    await load("refresh");
+  };
+
   return (
     <div className="mx-auto max-w-[1220px]">
       <div className="flex min-h-[50px] flex-col gap-4 border-b border-[#c9d4d2] pb-5 xl:flex-row xl:items-center xl:justify-end">
@@ -161,16 +175,28 @@ export default function NotificationsPage() {
             Stay updated on your recovery process and system alerts.
           </p>
         </div>
-        <Button
-          type="button"
-          variant="ghost"
-          onClick={handleMarkAllRead}
-          disabled={isSubmitting || unreadCount === 0}
-          className="w-fit text-lg font-bold text-[#006d62] hover:text-[#00584f]"
-        >
-          <CheckCircle2 className="mr-2 size-5" />
-          Mark all as read
-        </Button>
+        <div className="flex flex-wrap items-center gap-3">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleRefresh}
+            disabled={isRefreshing || isSubmitting}
+            className="h-10 rounded-lg border-[#b8c6c4] bg-white px-4 text-sm font-bold text-[#006d62] hover:border-[#007a6c]"
+          >
+            <RefreshCw className={cn("mr-2 size-4", isRefreshing && "animate-spin")} />
+            Refresh
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            onClick={handleMarkAllRead}
+            disabled={isSubmitting || unreadCount === 0}
+            className="h-10 w-fit px-3 text-sm font-bold text-[#006d62] hover:text-[#00584f]"
+          >
+            <CheckCircle2 className="mr-2 size-4" />
+            Mark all as read
+          </Button>
+        </div>
       </div>
 
       <div className="mt-9 flex flex-wrap gap-3">
