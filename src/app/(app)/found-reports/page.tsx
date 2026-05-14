@@ -347,21 +347,21 @@ export default function FoundReportsPage() {
         </div>
       </div>
 
-      <section className="mt-9 rounded-xl border border-[#e3e7e6] bg-white p-5 shadow-sm">
-        <div className="grid gap-4 xl:grid-cols-[minmax(260px,1fr)_180px_180px_115px_170px]">
-          <label className="relative block">
-            <Search className="pointer-events-none absolute left-4 top-1/2 size-6 -translate-y-1/2 text-[#505a5c]" />
+      <section className="mt-6 border-y border-[#d7dfdd] py-4">
+        <div className="grid min-w-0 gap-3 md:grid-cols-2 2xl:grid-cols-[minmax(220px,1fr)_150px_150px_130px_145px]">
+          <label className="relative block min-w-0 md:col-span-2 2xl:col-span-1">
+            <Search className="pointer-events-none absolute left-3 top-1/2 size-5 -translate-y-1/2 text-[#505a5c]" />
             <Input
               type="search"
               value={search}
               onChange={(event) => setSearch(event.target.value)}
               placeholder="Search by item name, ID, or description..."
-              className="h-[60px] rounded-lg border-[#b8c6c4] bg-white pl-14 text-lg text-[#182224] placeholder:text-[#b2b9ba] focus-visible:border-[#007a6c] focus-visible:ring-[#007a6c]/20"
+              className="h-10 rounded-lg border-[#b8c6c4] bg-white pl-11 text-sm text-[#182224] placeholder:text-[#8b9496] focus-visible:border-[#007a6c] focus-visible:ring-[#007a6c]/20"
             />
           </label>
 
           <Select value={category} onValueChange={(value) => setCategory(value as "all" | ItemCategory)}>
-            <SelectTrigger className="h-[60px] w-full rounded-lg border-[#b8c6c4] bg-white px-4 text-lg text-[#182224]">
+            <SelectTrigger className="h-10 w-full min-w-0 rounded-lg border-[#b8c6c4] bg-white px-3 text-sm text-[#182224]">
               <span className="truncate text-left">
                 Category: {category === "all" ? "All" : category}
               </span>
@@ -377,7 +377,7 @@ export default function FoundReportsPage() {
           </Select>
 
           <Select value={status} onValueChange={(value) => setStatus(value as "all" | FoundReportStatus)}>
-            <SelectTrigger className="h-[60px] w-full rounded-lg border-[#b8c6c4] bg-white px-4 text-lg text-[#182224]">
+            <SelectTrigger className="h-10 w-full min-w-0 rounded-lg border-[#b8c6c4] bg-white px-3 text-sm text-[#182224]">
               <span className="truncate text-left">
                 Status: {status === "all" ? "All" : getStatusLabel(status)}
               </span>
@@ -397,16 +397,16 @@ export default function FoundReportsPage() {
               type="date"
               value={date}
               onChange={(event) => setDate(event.target.value)}
-              className="h-[60px] rounded-lg border-[#b8c6c4] bg-white px-4 text-base text-[#182224] focus-visible:border-[#007a6c] focus-visible:ring-[#007a6c]/20"
+              className="h-10 rounded-lg border-[#b8c6c4] bg-white px-3 text-sm text-[#182224] focus-visible:border-[#007a6c] focus-visible:ring-[#007a6c]/20"
             />
           </label>
 
           <Button
             type="button"
             variant="secondary"
-            className="h-[60px] rounded-lg border border-[#b8c6c4] bg-white text-lg font-bold text-[#101417] hover:border-[#007a6c] hover:bg-white"
+            className="h-10 w-full min-w-0 rounded-lg border border-[#b8c6c4] bg-white px-3 text-sm font-bold text-[#101417] hover:border-[#007a6c] hover:bg-white"
           >
-            <Filter className="mr-3 size-5" />
+            <Filter className="mr-2 size-4" />
             More Filters
           </Button>
         </div>

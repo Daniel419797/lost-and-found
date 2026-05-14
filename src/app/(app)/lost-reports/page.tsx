@@ -320,21 +320,21 @@ export default function LostReportsPage() {
         </Link>
       </div>
 
-      <section className="mt-9 rounded-xl border border-[#e3e7e6] bg-white p-6 shadow-sm">
+      <section className="mt-6 border-y border-[#d7dfdd] py-4">
         <label className="relative block">
-          <Search className="pointer-events-none absolute left-5 top-1/2 size-6 -translate-y-1/2 text-[#505a5c]" />
+          <Search className="pointer-events-none absolute left-3 top-1/2 size-5 -translate-y-1/2 text-[#505a5c]" />
           <Input
             type="search"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
             placeholder="Search item name or ID..."
-            className="h-[62px] rounded-lg border-[#b8c6c4] bg-white pl-16 text-base text-[#182224] placeholder:text-[#5f686b] focus-visible:border-[#007a6c] focus-visible:ring-[#007a6c]/20 sm:text-xl"
+            className="h-10 rounded-lg border-[#b8c6c4] bg-white pl-11 text-sm text-[#182224] placeholder:text-[#6f787a] focus-visible:border-[#007a6c] focus-visible:ring-[#007a6c]/20"
           />
         </label>
 
-        <div className="mt-5 grid gap-5 lg:grid-cols-[1fr_1fr_1fr_205px]">
+        <div className="mt-3 grid min-w-0 gap-3 md:grid-cols-2 xl:grid-cols-[minmax(180px,1fr)_150px_150px_145px]">
           <Select value={category} onValueChange={(value) => setCategory(value as "all" | ItemCategory)}>
-            <SelectTrigger className="h-[58px] w-full rounded-lg border-[#b8c6c4] bg-white px-4 text-lg text-[#182224]">
+            <SelectTrigger className="h-10 w-full min-w-0 rounded-lg border-[#b8c6c4] bg-white px-3 text-sm text-[#182224]">
               <span className="truncate text-left">
                 {category === "all" ? "All Categories" : category}
               </span>
@@ -350,7 +350,7 @@ export default function LostReportsPage() {
           </Select>
 
           <Select value={status} onValueChange={(value) => setStatus(value as "all" | LostReportStatus)}>
-            <SelectTrigger className="h-[58px] w-full rounded-lg border-[#b8c6c4] bg-white px-4 text-lg text-[#182224]">
+            <SelectTrigger className="h-10 w-full min-w-0 rounded-lg border-[#b8c6c4] bg-white px-3 text-sm text-[#182224]">
               <span className="truncate text-left">
                 {status === "all" ? "Any Status" : getStatusLabel(status)}
               </span>
@@ -370,16 +370,16 @@ export default function LostReportsPage() {
               type="date"
               value={date}
               onChange={(event) => setDate(event.target.value)}
-              className="h-[58px] rounded-lg border-[#b8c6c4] bg-white px-4 text-lg text-[#182224] focus-visible:border-[#007a6c] focus-visible:ring-[#007a6c]/20"
+              className="h-10 rounded-lg border-[#b8c6c4] bg-white px-3 text-sm text-[#182224] focus-visible:border-[#007a6c] focus-visible:ring-[#007a6c]/20"
             />
           </label>
 
           <Button
             type="button"
             variant="secondary"
-            className="h-[58px] rounded-lg bg-[#e0e3e4] text-lg font-bold text-[#101417] hover:bg-[#d8dddd]"
+            className="h-10 w-full min-w-0 rounded-lg bg-[#e0e3e4] px-3 text-sm font-bold text-[#101417] hover:bg-[#d8dddd]"
           >
-            <Filter className="mr-3 size-6" />
+            <Filter className="mr-2 size-4" />
             More Filters
           </Button>
         </div>
