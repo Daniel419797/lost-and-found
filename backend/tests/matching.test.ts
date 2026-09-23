@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { scoreMatch } from "../src/lib/matching.js";
+import { scoreMatch } from "../src/lib/matchScore.js";
 
 const lost = {
   id: "lost-1",

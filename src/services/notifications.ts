@@ -1,5 +1,4 @@
 import api from "@/lib/api";
-import { buildLostFoundUrl, resolveProjectId } from "@/lib/project-api";
 
 export type NotificationRow = {
   id: string;
@@ -13,27 +12,17 @@ export type NotificationRow = {
 };
 
 export const notificationsApi = {
-  list: async (params?: { status?: "read" | "unread" | "all"; projectId?: string }) => {
-    const projectId = resolveProjectId(params?.projectId);
-    return api.get<{ data: { rows: NotificationRow[]; total: number } }>(
-      buildLostFoundUrl("/notifications", projectId),
-      { params: { status: params?.status || "all" } },
-    );
-  },
+  list: (params?: { status?: "read" | "unread" | "all" }) =>
+    api.get<{ data: { rows: NotificationRow[]; total: number } }>("/notifications", {
+      params: { status: params?.status || "all" },
+    }),
 
-  markRead: async (id: string, projectId?: string) => {
-    const resolvedProjectId = resolveProjectId(projectId);
-    return api.patch<{ data: { notification: NotificationRow; idempotent: boolean } }>(
-      buildLostFoundUrl(`/notifications/${id}/read`, resolvedProjectId),
+  markRead: (id: string) =>
+    api.patch<{ data: { notification: NotificationRow; idempotent: boolean } }>(
+      `/notifications/${id}/read`,
       {},
-    );
-  },
+    ),
 
-  markAllRead: async (projectId?: string) => {
-    const resolvedProjectId = resolveProjectId(projectId);
-    return api.patch<{ data: { updated_count: number } }>(
-      buildLostFoundUrl("/notifications/mark-all-read", resolvedProjectId),
-      {},
-    );
-  },
+  markAllRead: () =>
+    api.patch<{ data: { updated_count: number } }>("/notifications/mark-all-read", {}),
 };

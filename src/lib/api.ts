@@ -1,24 +1,33 @@
 import axios from "axios";
 
+function normalizeApiBase(value: string | undefined): string {
+  const base = (value || "").replace(/\/+$/, "");
+  if (!base) return "/api/v1";
+  return base.endsWith("/api/v1") ? base : `${base}/api/v1`;
+}
+
+const API_BASE = normalizeApiBase(process.env.NEXT_PUBLIC_API_URL);
+
 const api = axios.create({
-  baseURL: process.env.NEXT_PUBLIC_API_URL,
+  baseURL: API_BASE,
   headers: { "Content-Type": "application/json" },
+  withCredentials: true,
 });
 
 const MAX_TRANSIENT_RETRIES = 3;
 const RETRY_DELAYS_MS = [400, 1000, 2000];
 
 let wakePromise: Promise<void> | null = null;
+let refreshPromise: Promise<string> | null = null;
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function getBackendHealthUrl(): string | null {
-  const base = process.env.NEXT_PUBLIC_API_URL;
-  if (!base) return null;
   try {
-    const parsed = new URL(base);
+    if (!API_BASE.startsWith("http://") && !API_BASE.startsWith("https://")) return null;
+    const parsed = new URL(API_BASE);
     return `${parsed.origin}/health`;
   } catch {
     return null;
@@ -36,40 +45,65 @@ async function wakeBackendOnce(): Promise<void> {
     try {
       await fetch(healthUrl, { method: "GET", mode: "no-cors", cache: "no-store" });
     } catch {
-      // Ignore warmup failures
+      // Best-effort warmup for hosts that may spin services down.
+    } finally {
+      setTimeout(() => {
+        wakePromise = null;
+      }, 5000);
     }
   })();
 
   await wakePromise;
 }
 
-// Attach JWT + API key on every request
+async function refreshAccessToken(): Promise<string> {
+  if (refreshPromise) return refreshPromise;
+
+  refreshPromise = axios
+    .post<{ data: { token: string } }>(
+      `${API_BASE}/auth/refresh`,
+      {},
+      { withCredentials: true, headers: { "Content-Type": "application/json" } },
+    )
+    .then((response) => {
+      const token = response.data.data.token;
+      if (typeof window !== "undefined") localStorage.setItem("token", token);
+      return token;
+    })
+    .finally(() => {
+      refreshPromise = null;
+    });
+
+  return refreshPromise;
+}
+
 api.interceptors.request.use((config) => {
-  if (typeof window !== "undefined") {
-    void wakeBackendOnce();
-  }
+  if (typeof window !== "undefined") void wakeBackendOnce();
+
   if (typeof FormData !== "undefined" && config.data instanceof FormData) {
     delete config.headers["Content-Type"];
     delete config.headers["content-type"];
   }
-  const apiKey = process.env.NEXT_PUBLIC_API_KEY;
-  if (apiKey) {
-    config.headers["x-api-key"] = apiKey;
-  }
+
   if (typeof window !== "undefined") {
     const token = localStorage.getItem("token");
-    if (token) {
-      config.headers.Authorization = `Bearer ${token}`;
-    }
+    if (token) config.headers.Authorization = `Bearer ${token}`;
   }
+
   return config;
 });
 
-// Retry on network/transient errors; redirect to /login on auth/me 401
 api.interceptors.response.use(
   (res) => res,
   async (error) => {
-    const config = error?.config as (Record<string, unknown> & { headers?: Record<string, string> }) | undefined;
+    const config = error?.config as
+      | (Record<string, unknown> & {
+          headers?: Record<string, string>;
+          url?: string;
+          __transientRetryCount?: number;
+          __authRetry?: boolean;
+        })
+      | undefined;
     const status = error?.response?.status as number | undefined;
     const isNetworkError = !error?.response;
     const isTransientStatus = status === 502 || status === 503;
@@ -78,32 +112,35 @@ api.interceptors.response.use(
       const currentRetry = Number(config.__transientRetryCount ?? 0);
       if (currentRetry < MAX_TRANSIENT_RETRIES) {
         config.__transientRetryCount = currentRetry + 1;
-        if (currentRetry === 0) {
-          await wakeBackendOnce();
-        }
+        if (currentRetry === 0) await wakeBackendOnce();
         await sleep(RETRY_DELAYS_MS[currentRetry] ?? RETRY_DELAYS_MS[RETRY_DELAYS_MS.length - 1]);
         return api.request(config);
       }
     }
 
-    if (typeof window !== "undefined" && error.response?.status === 401) {
-      const rawUrl = String(config?.url ?? "");
-      let pathname = rawUrl;
-      if (rawUrl.startsWith("http://") || rawUrl.startsWith("https://")) {
-        try {
-          pathname = new URL(rawUrl).pathname;
-        } catch {
-          pathname = rawUrl;
-        }
-      }
-      const isAuthMeEndpoint = /\/auth\/me(?:$|\?)/.test(pathname);
-      if (isAuthMeEndpoint) {
+    const rawUrl = String(config?.url ?? "");
+    const authEndpoint = /\/auth\/(?:login|register|refresh)(?:$|\?)/.test(rawUrl);
+
+    if (
+      typeof window !== "undefined" &&
+      status === 401 &&
+      config &&
+      !config.__authRetry &&
+      !authEndpoint
+    ) {
+      config.__authRetry = true;
+      try {
+        const token = await refreshAccessToken();
+        if (config.headers) config.headers.Authorization = `Bearer ${token}`;
+        return api.request(config);
+      } catch {
         localStorage.removeItem("token");
-        window.location.href = "/login";
+        if (window.location.pathname !== "/login") window.location.href = "/login";
       }
     }
+
     return Promise.reject(error);
-  }
+  },
 );
 
 export default api;
