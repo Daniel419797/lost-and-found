@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { rateLimit } from "express-rate-limit";
 import { z } from "zod";
+import { env } from "../config.js";
 import { writeAudit } from "../lib/audit.js";
 import { prisma } from "../lib/prisma.js";
 import {
