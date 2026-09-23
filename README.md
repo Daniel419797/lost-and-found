@@ -1,96 +1,100 @@
-# Campus Lost and Found Web App
+# Campus Lost & Found
 
-Production-ready Next.js frontend for a university lost-and-found system.
+Full-stack campus lost-and-found application with a dedicated application backend.
 
-## Stack
+## Architecture
 
-- Next.js 16.2.6 (App Router, Turbopack)
-- React 19.2.4 + TypeScript
+### Frontend
+
+- Next.js 16.2.6 App Router
+- React 19 + TypeScript
 - Tailwind CSS v4
-- shadcn/ui v4 + @base-ui/react
-- react-hook-form + zod
-- Axios API client for Nexus Forge backend
+- shadcn/ui
+- react-hook-form + Zod
+- Axios
 
-## Key App Features
+### Backend
 
-- Auth: login, register, profile update, password change, logout
-- Reporting: create and list lost/found item reports
-- Search: merged lost/found browse with filters
-- Claims: student claim tracking and staff claim review workflow
-- Notifications: in-app claim and handover updates with mark-read actions
-- Admin: role-gated audit logs and operational metrics
+- Node.js 24
+- Express 5 + TypeScript
+- PostgreSQL + Prisma 7
+- JWT access tokens with rotating refresh sessions
+- Role-based authorization
+- S3-compatible image storage
+- Audit logging and operational metrics
 
-## Run Locally
+The application no longer depends on Nexus Forge tables, project gateways, API keys or logic modules.
 
-1. Install dependencies:
+## Features
 
-```powershell
+- Student registration and login
+- Profile and password management
+- Lost-item reports
+- Found-item reports and custody locations
+- Server-side filtering and ownership enforcement
+- Match scoring across lost and found reports
+- Match notifications
+- Ownership claims
+- Staff/admin review workflow
+- Handover scheduling and completion
+- In-app notifications
+- Admin audit logs and metrics
+- R2/S3-compatible image uploads
+
+## Frontend setup
+
+```bash
 npm install
-```
-
-2. Configure environment in `.env.local`:
-
-```env
-NEXT_PUBLIC_API_URL=<your-nexusforge-api-base-or-project-gateway>
-NEXT_PUBLIC_API_KEY=<your-api-key>
-NEXT_PUBLIC_MODULE_PROJECT_ID=<project-id-for-logic-modules>
-```
-
-## Required Environment Variables
-
-Copy `.env.example` to `.env.local` and set these values:
-
-- `NEXT_PUBLIC_API_URL`: Required. Base URL for the Nexus Forge backend API. The app supports either the core API base (`https://.../api/v1`) or the project gateway form (`https://.../api/v1/p/<project-id>`).
-- `NEXT_PUBLIC_API_KEY`: Required. Public API key sent with every request by the shared Axios client.
-- `NEXT_PUBLIC_MODULE_PROJECT_ID`: Required for the lost-and-found workflow automations. Used when the frontend triggers the `claim-review` and `match-scoring` logic modules. If this is missing, standard CRUD still works, but those logic-module execute calls are skipped or must be passed an explicit project id by the caller.
-
-3. Start development server:
-
-```powershell
+cp .env.example .env.local
 npm run dev
 ```
 
-## Quality Gates
+Frontend environment:
 
-- Lint:
+```env
+NEXT_PUBLIC_API_URL=http://localhost:4000/api/v1
+```
 
-```powershell
+For production, set `NEXT_PUBLIC_API_URL` to the deployed backend API URL.
+
+## Backend setup
+
+See [backend/README.md](backend/README.md).
+
+From the backend directory:
+
+```bash
+npm install
+cp .env.example .env
+npm run prisma:deploy
+npm run dev
+```
+
+## Quality gates
+
+Frontend:
+
+```bash
 npm run lint
-```
-
-- Type check:
-
-```powershell
 npm run typecheck
-```
-
-- Production build:
-
-```powershell
 npm run build
 ```
 
-- Release verification shortcut:
+Backend:
 
-```powershell
-npm run verify
+```bash
+cd backend
+npm run typecheck
+npm test
+npm run build
 ```
 
-## CI Policy (Pull Requests)
+## Security model
 
-PRs that touch this app are enforced by:
-
-- `.github/workflows/lost-and-found-ci.yml`
-
-Policy behavior:
-
-- Runs `npm run verify` (lint + production build)
-- Runs dependency audit policy (`npm audit --omit=dev --json`)
-- Fails on any reported production dependency vulnerability
-
-## Verified Status (2026-05-13)
-
-- `npm run lint`: pass
-- `npm run typecheck`: pass
-- `npm run build`: pass
-- `npm audit --omit=dev`: pass, 0 vulnerabilities
+- Public registration cannot self-assign staff/admin roles.
+- Protected writes derive the user identity from the verified access token.
+- Ownership and staff/admin permissions are enforced by the API.
+- Passwords use bcrypt with a 12-round work factor.
+- Refresh tokens are random, hashed in the database, rotated, revocable, and stored in an HttpOnly cookie.
+- API traffic is protected with Helmet, CORS restrictions, request-size limits and rate limiting.
+- Administrative and security-sensitive actions are written to the audit log.

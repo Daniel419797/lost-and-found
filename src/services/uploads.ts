@@ -1,5 +1,4 @@
 import api from "@/lib/api";
-import { buildLostFoundUrl, resolveProjectId } from "@/lib/project-api";
 
 export type UploadedImage = {
   url: string;
@@ -9,15 +8,11 @@ export type UploadedImage = {
 };
 
 export const uploadsApi = {
-  uploadItemPhoto: async (file: File, projectId?: string): Promise<UploadedImage> => {
+  uploadItemPhoto: async (file: File): Promise<UploadedImage> => {
     const formData = new FormData();
     formData.append("file", file);
 
-    const res = await api.post<{ data: UploadedImage }>(
-      buildLostFoundUrl("/uploads/item-photo", resolveProjectId(projectId)),
-      formData,
-    );
-
+    const res = await api.post<{ data: UploadedImage }>("/uploads/item-photo", formData);
     return res.data.data;
   },
 };

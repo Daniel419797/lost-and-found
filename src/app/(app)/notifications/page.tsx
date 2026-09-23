@@ -53,10 +53,15 @@ function formatNotificationTime(value: string) {
   return format(date, "MMM d, h:mm a");
 }
 
-function getClaimHref(row: NotificationRow) {
+function getNotificationHref(row: NotificationRow) {
   const meta = row.meta_json ?? {};
   const claimId = typeof meta.claimId === "string" ? meta.claimId : undefined;
   if (claimId) return `/claims/${claimId}`;
+
+  const foundReportId =
+    typeof meta.foundReportId === "string" ? meta.foundReportId : undefined;
+  if (foundReportId) return `/found-reports/${foundReportId}`;
+
   return null;
 }
 
@@ -262,7 +267,7 @@ function NotificationCard({
   isSubmitting: boolean;
 }) {
   const filter = getFilterForType(row.type);
-  const href = getClaimHref(row);
+  const href = getNotificationHref(row);
   const Icon = filter === "match" ? Network : filter === "handover" ? Handshake : filter === "claim" ? CheckCircle2 : AlarmClock;
   const highlighted = !row.is_read;
   const actionLabel = filter === "handover" ? "Open Pickup" : filter === "claim" ? "Open Claim" : "View Details";
