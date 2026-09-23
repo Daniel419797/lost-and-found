@@ -17,6 +17,7 @@
     "prisma:migrate": "prisma migrate dev",
     "prisma:deploy": "prisma migrate deploy",
     "prisma:studio": "prisma studio",
+    "admin:bootstrap": "npm run build && node dist/src/scripts/bootstrapAdmin.js",
     "postinstall": "prisma generate"
   },
   "dependencies": {

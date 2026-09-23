@@ -44,6 +44,10 @@ export const errorHandler: ErrorRequestHandler = (error, _req, res, _next) => {
       res.status(404).json({ message: "Record not found." });
       return;
     }
+    if (error.code === "P2003") {
+      res.status(409).json({ message: "This operation conflicts with related records." });
+      return;
+    }
   }
 
   console.error(error);

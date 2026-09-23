@@ -17,13 +17,15 @@ const envSchema = z.object({
   COOKIE_SECURE: booleanString.default(false),
   COOKIE_SAME_SITE: z.enum(["lax", "strict", "none"]).default("lax"),
   TRUST_PROXY: booleanString.default(false),
-  BOOTSTRAP_SUPER_ADMIN_EMAIL: optionalText,
   STORAGE_ENDPOINT: optionalUrl,
   STORAGE_REGION: z.string().trim().min(1).default("auto"),
   STORAGE_BUCKET: optionalText,
   STORAGE_ACCESS_KEY_ID: optionalText,
   STORAGE_SECRET_ACCESS_KEY: optionalText,
   STORAGE_PUBLIC_BASE_URL: optionalUrl,
+  ADMIN_BOOTSTRAP_EMAIL: optionalText,
+  ADMIN_BOOTSTRAP_PASSWORD: optionalText,
+  ADMIN_BOOTSTRAP_NAME: optionalText,
 });
 
 export const env = envSchema.parse(process.env);

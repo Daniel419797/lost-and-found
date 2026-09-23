@@ -1,7 +1,6 @@
 import { Router } from "express";
 import { rateLimit } from "express-rate-limit";
 import { z } from "zod";
-import { env } from "../config.js";
 import { writeAudit } from "../lib/audit.js";
 import { prisma } from "../lib/prisma.js";
 import {
@@ -83,19 +82,16 @@ authRouter.post("/register", authLimiter, async (req, res) => {
   const existing = await prisma.user.findUnique({ where: { email }, select: { id: true } });
   if (existing) throw new AppError(409, "An account with that email already exists.");
 
-  const bootstrapEmail = env.BOOTSTRAP_SUPER_ADMIN_EMAIL?.toLowerCase();
-  const role = bootstrapEmail && bootstrapEmail === email ? "super_admin" : "student";
-
   const user = await prisma.user.create({
     data: {
       email,
       displayName: input.displayName,
       passwordHash: await hashPassword(input.password),
-      role,
+      role: "student",
     },
   });
 
-  void writeAudit(req, "auth.register", "user", user.id, { email: user.email, role: user.role });
+  void writeAudit(req, "auth.register", "user", user.id, { email: user.email, role: "student" });
   res.status(201).json({ data: userView(user), message: "Account created." });
 });
 
@@ -199,6 +195,24 @@ authRouter.patch("/me", requireAuth, async (req, res) => {
 
 authRouter.delete("/me", requireAuth, async (req, res) => {
   const userId = authenticatedUserId(req);
+
+  const [foundReportsWithClaims, officerHandovers] = await Promise.all([
+    prisma.foundReport.count({
+      where: {
+        finderUserId: userId,
+        claims: { some: {} },
+      },
+    }),
+    prisma.handover.count({ where: { officerUserId: userId } }),
+  ]);
+
+  if (foundReportsWithClaims > 0 || officerHandovers > 0) {
+    throw new AppError(
+      409,
+      "This account has custody or handover records that must be reassigned before deletion.",
+    );
+  }
+
   await prisma.user.delete({ where: { id: userId } });
   clearRefreshCookie(res);
   res.status(204).send();

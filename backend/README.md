@@ -70,7 +70,23 @@ API base:
 
 ## First administrator
 
-Set `BOOTSTRAP_SUPER_ADMIN_EMAIL` before the intended administrator registers. A registration using that exact email becomes `super_admin`. All other public registrations become `student`, regardless of any role value sent by the client.
+Public registration always creates a `student` account. Administrative roles are never granted from a browser request.
+
+To bootstrap the first super administrator, set these server-only variables temporarily:
+
+```env
+ADMIN_BOOTSTRAP_EMAIL=admin@example.com
+ADMIN_BOOTSTRAP_PASSWORD=<strong-password>
+ADMIN_BOOTSTRAP_NAME=System Administrator
+```
+
+Then run:
+
+```bash
+npm run admin:bootstrap
+```
+
+The command creates the account if it does not exist, or promotes and resets the password of the configured account if it already exists. Remove the bootstrap password from the environment after the command succeeds.
 
 A super admin can later change user roles through:
 
