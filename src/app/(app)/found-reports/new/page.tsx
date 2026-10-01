@@ -56,7 +56,6 @@ const STORAGE_LOCATIONS = [
   "Campus Police Office",
 ];
 
-const CONTACT_OPTIONS = ["Email Only", "App Notification", "Email and App"] as const;
 const ACCEPTED_PHOTO_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
 const MAX_PHOTO_BYTES = 5 * 1024 * 1024;
 
@@ -80,7 +79,6 @@ const schema = z.object({
   color: z.string().max(50).optional(),
   locationFound: z.string().min(1, "Location is required").max(300),
   custodyLocation: z.string().min(1, "Storage location is required").max(300),
-  contactPreference: z.enum(CONTACT_OPTIONS),
 });
 
 type FormValues = z.infer<typeof schema>;
@@ -104,7 +102,6 @@ export default function ReportFoundItemPage() {
       color: "",
       locationFound: "",
       custodyLocation: "",
-      contactPreference: "Email Only",
     },
   });
 
@@ -165,12 +162,7 @@ export default function ReportFoundItemPage() {
     setIsSubmitting(true);
     try {
       const uploadedPhoto = selectedPhoto ? await uploadsApi.uploadItemPhoto(selectedPhoto) : null;
-      const description = [
-        values.description,
-        `Contact preference: ${values.contactPreference}`,
-      ]
-        .filter(Boolean)
-        .join("\n\n");
+      const description = values.description?.trim() ?? "";
 
       await foundReportsApi.create({
         itemTitle: values.itemTitle,
@@ -400,30 +392,7 @@ export default function ReportFoundItemPage() {
                     </FormItem>
                   )}
                 />
-                <FormField
-                  control={form.control}
-                  name="contactPreference"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel className="text-lg font-bold">Contact Preference</FormLabel>
-                      <Select onValueChange={field.onChange} value={field.value}>
-                        <FormControl>
-                          <SelectTrigger className="h-12 w-full text-lg">
-                            <SelectValue />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          {CONTACT_OPTIONS.map((option) => (
-                            <SelectItem key={option} value={option}>
-                              {option}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
+
               </div>
             </section>
 

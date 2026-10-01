@@ -6,7 +6,7 @@ Full-stack campus lost-and-found application with a dedicated application backen
 
 ### Frontend
 
-- Next.js 16.2.6 App Router
+- Next.js 16.3.8 App Router
 - React 19 + TypeScript
 - Tailwind CSS v4
 - shadcn/ui
@@ -27,12 +27,13 @@ The application no longer depends on Nexus Forge tables, project gateways, API k
 
 ## Features
 
-- Student registration and login
-- Profile and password management
+- Student/staff identity registration (institutional ID + department) and login
+- Profile, department, password, and account lifecycle management
 - Lost-item reports
 - Found-item reports and custody locations
 - Server-side filtering and ownership enforcement
 - Match scoring across lost and found reports
+- Paginated, ownership-aware match-candidate API and dashboard integration
 - Match notifications
 - Ownership claims
 - Staff/admin review workflow

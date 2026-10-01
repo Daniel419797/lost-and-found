@@ -1,4 +1,5 @@
 import api from "@/lib/api";
+import type { UserRole } from "@/types";
 
 export type AuditLogRow = {
   id: string;
@@ -21,6 +22,16 @@ export type AdminMetrics = {
   audit_events_last_24h: number;
 };
 
+export type AdminUser = {
+  id: string;
+  email: string;
+  displayName: string;
+  studentStaffId?: string;
+  department?: string;
+  role: UserRole;
+  createdAt: string;
+};
+
 export const adminApi = {
   getAuditLogs: (params?: {
     action?: string;
@@ -38,4 +49,10 @@ export const adminApi = {
     ),
 
   getMetrics: () => api.get<{ data: AdminMetrics }>("/admin/metrics"),
+
+  getUsers: (params?: { search?: string; role?: UserRole; limit?: number; offset?: number }) =>
+    api.get<{ data: { rows: AdminUser[]; total: number } }>("/admin/users", { params }),
+
+  updateUserRole: (id: string, role: UserRole) =>
+    api.patch<{ data: AdminUser }>(`/admin/users/${id}/role`, { role }),
 };

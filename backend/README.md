@@ -18,10 +18,10 @@ Dedicated API for the campus Lost & Found application. It replaces the previous 
 
 The backend owns:
 
-- registration, login, refresh sessions, profile updates and account deletion
+- registration with institutional ID/department, login, refresh sessions, profile updates and account deletion
 - student/staff/admin authorization
 - lost and found report CRUD and filtering
-- match candidate scoring and match notifications
+- match candidate scoring, ownership-aware candidate retrieval, stale-candidate cleanup and match notifications
 - claim submission and staff review
 - atomic claim approval/rejection state transitions
 - handover scheduling and completion
@@ -68,6 +68,16 @@ API base:
 
 - `/api/v1`
 
+Key workflow routes include:
+
+- `POST /auth/register`, `POST /auth/login`, `POST /auth/refresh`, `GET/PATCH/DELETE /auth/me`
+- `GET/POST/PATCH/DELETE /lost-reports` and `/found-reports`
+- `GET /matches` for active match candidates (students see candidates for their own lost reports; staff can review system-wide candidates)
+- `GET/POST /claims` plus staff claim-decision routes
+- `GET/PATCH /handovers` for pickup workflow and completion
+- `GET/PATCH /notifications`
+- `GET /admin/metrics`, `GET /admin/audit-logs`, and super-admin role management
+
 ## First administrator
 
 Public registration always creates a `student` account. Administrative roles are never granted from a browser request.
@@ -107,7 +117,7 @@ Set:
 - `STORAGE_SECRET_ACCESS_KEY`
 - `STORAGE_PUBLIC_BASE_URL`
 
-The API accepts JPEG, PNG and WebP images up to 5 MB.
+The API accepts JPEG, PNG and WebP images up to 5 MB and verifies file signatures instead of trusting the declared MIME type.
 
 ## Render deployment
 

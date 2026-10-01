@@ -11,6 +11,8 @@ export const authApi = {
   register: (data: RegisterRequestDTO) =>
     api.post<{ data: User; message: string }>("/auth/register", {
       displayName: data.displayName,
+      studentStaffId: data.studentStaffId,
+      department: data.department,
       email: data.email,
       password: data.password,
     }),

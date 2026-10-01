@@ -1,6 +1,7 @@
 "use client";
 
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import type { ComponentType } from "react";
 import { useEffect, useMemo, useState } from "react";
 import { toast } from "sonner";
@@ -19,9 +20,10 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { lostReportsApi } from "@/services/lostReports";
 import { foundReportsApi } from "@/services/foundReports";
 import { claimsApi } from "@/services/claims";
+import { matchesApi } from "@/services/matches";
 import { useAuth } from "@/context/AuthContext";
 import { cn } from "@/lib/utils";
-import type { FoundReport, LostReport } from "@/types";
+import type { FoundReport, LostReport, MatchCandidate } from "@/types";
 
 type Stats = {
   openLost: number;
@@ -54,6 +56,29 @@ function isThisMonth(value: string) {
   if (Number.isNaN(date.getTime())) return false;
   const now = new Date();
   return date.getMonth() === now.getMonth() && date.getFullYear() === now.getFullYear();
+}
+
+async function countReunionsThisMonth(): Promise<number> {
+  let offset = 0;
+  const limit = 200;
+  let count = 0;
+
+  while (true) {
+    const res = await lostReportsApi.list({ status: "recovered", limit, offset });
+    count += res.data.data.filter((report) => isThisMonth(report.updatedAt || report.dateLost)).length;
+    if (offset + res.data.data.length >= res.data.total || res.data.data.length === 0) return count;
+    offset += res.data.data.length;
+  }
+}
+
+async function countPendingClaims(isStaff: boolean): Promise<number> {
+  const load = (status: "pending" | "under_review") =>
+    isStaff
+      ? claimsApi.listReviewQueue({ status, limit: 1 })
+      : claimsApi.listMine({ status, limit: 1 });
+
+  const [pending, underReview] = await Promise.all([load("pending"), load("under_review")]);
+  return pending.data.total + underReview.data.total;
 }
 
 function getRelativeTime(value: string) {
@@ -159,12 +184,14 @@ function StatusBadge({ status }: { status: ActivityItem["status"] }) {
 }
 
 export default function DashboardPage() {
+  const router = useRouter();
   const { user } = useAuth();
   const isStaff = user?.role === "staff" || user?.role === "admin" || user?.role === "super_admin";
   const [stats, setStats] = useState<Stats>(DEFAULT_STATS);
   const [recentLost, setRecentLost] = useState<LostReport[]>([]);
   const [recentFound, setRecentFound] = useState<FoundReport[]>([]);
-  const [matchedLost, setMatchedLost] = useState<LostReport[]>([]);
+  const [matchCandidates, setMatchCandidates] = useState<MatchCandidate[]>([]);
+  const [dashboardSearch, setDashboardSearch] = useState("");
   const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
@@ -172,42 +199,35 @@ export default function DashboardPage() {
 
       const load = async () => {
       setIsLoading(true);
-      const [lostResult, foundResult, claimsResult, recoveredResult, matchedResult] =
+      const [lostResult, foundResult, pendingCountResult, reunionCountResult, matchesResult] =
         await Promise.allSettled([
-          lostReportsApi.list({ status: "open", limit: 50 }),
-          foundReportsApi.list({ status: "open", limit: 50 }),
-          isStaff
-            ? claimsApi.listReviewQueue({ status: "pending", limit: 50 })
-            : claimsApi.listMine({ status: "pending", limit: 50 }),
-          lostReportsApi.list({ status: "recovered", limit: 100 }),
-          lostReportsApi.list({ status: "matched", limit: 10 }),
+          lostReportsApi.list({ status: "open", limit: 5 }),
+          foundReportsApi.list({ status: "open", limit: 5 }),
+          countPendingClaims(isStaff),
+          countReunionsThisMonth(),
+          matchesApi.list({ minScore: 70, limit: 2 }),
         ]);
 
       if (!isMounted) return;
 
       const lostData = lostResult.status === "fulfilled" ? lostResult.value.data : null;
       const foundData = foundResult.status === "fulfilled" ? foundResult.value.data : null;
-      const claimsData = claimsResult.status === "fulfilled" ? claimsResult.value.data : null;
-      const recoveredData =
-        recoveredResult.status === "fulfilled" ? recoveredResult.value.data : null;
-      const matchedData = matchedResult.status === "fulfilled" ? matchedResult.value.data : null;
+      const matchesData = matchesResult.status === "fulfilled" ? matchesResult.value.data : null;
 
       setStats({
         openLost: lostData?.total ?? 0,
         awaitingClaim: foundData?.total ?? 0,
-        pendingClaims: claimsData?.total ?? 0,
-        reunionsThisMonth:
-          recoveredData?.data.filter((report) => isThisMonth(report.updatedAt || report.dateLost))
-            .length ?? 0,
-        activeMatches: matchedData?.total ?? 0,
+        pendingClaims: pendingCountResult.status === "fulfilled" ? pendingCountResult.value : 0,
+        reunionsThisMonth: reunionCountResult.status === "fulfilled" ? reunionCountResult.value : 0,
+        activeMatches: matchesData?.total ?? 0,
       });
-      setRecentLost(lostData?.data.slice(0, 5) ?? []);
-      setRecentFound(foundData?.data.slice(0, 5) ?? []);
-      setMatchedLost(matchedData?.data.slice(0, 2) ?? []);
+      setRecentLost(lostData?.data ?? []);
+      setRecentFound(foundData?.data ?? []);
+      setMatchCandidates(matchesData?.data ?? []);
 
       if (
-        [lostResult, foundResult, claimsResult, recoveredResult, matchedResult].some(
-          (r) => r.status === "rejected",
+        [lostResult, foundResult, pendingCountResult, reunionCountResult, matchesResult].some(
+          (result) => result.status === "rejected",
         )
       ) {
         toast.error("Some dashboard data could not be loaded.");
@@ -230,13 +250,17 @@ export default function DashboardPage() {
   }, [recentFound, recentLost]);
 
   const potentialMatches = useMemo(() => {
-    return matchedLost.map((report) => ({
-      id: report.id,
-      title: report.itemTitle,
-      icon: report.category === "Books" ? BookOpen : Laptop,
-      detail: `${report.category}${report.locationLost ? ` at ${report.locationLost}` : ""}`,
-    }));
-  }, [matchedLost]);
+    return matchCandidates.map((candidate) => {
+      const report = candidate.foundReport;
+      return {
+        id: candidate.id,
+        href: `/found-reports/${report.id}`,
+        title: report.itemTitle,
+        icon: report.category === "Books" ? BookOpen : Laptop,
+        detail: `${candidate.score}% match · ${report.category}${report.locationFound ? ` at ${report.locationFound}` : ""}`,
+      };
+    });
+  }, [matchCandidates]);
 
   return (
     <div className="mx-auto max-w-[1220px]">
@@ -250,14 +274,23 @@ export default function DashboardPage() {
           </p>
         </div>
 
-        <label className="relative w-full max-w-[320px] xl:mt-1">
+        <form
+          className="relative w-full max-w-[320px] xl:mt-1"
+          onSubmit={(event) => {
+            event.preventDefault();
+            const query = dashboardSearch.trim();
+            router.push(query ? `/search?q=${encodeURIComponent(query)}` : "/search");
+          }}
+        >
           <Search className="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2 text-[#4e5b5e]" />
           <input
             type="search"
+            value={dashboardSearch}
+            onChange={(event) => setDashboardSearch(event.target.value)}
             placeholder="Search item ID or keyword..."
             className="h-12 w-full rounded-lg border border-[#b8c6c4] bg-white pl-12 pr-4 text-base text-[#182224] outline-none transition placeholder:text-[#6b7375] focus:border-[#007a6c] focus:ring-4 focus:ring-[#007a6c]/15"
           />
-        </label>
+        </form>
       </div>
 
       <section className="mt-9 grid gap-5 md:grid-cols-2 xl:grid-cols-4">
@@ -375,9 +408,10 @@ export default function DashboardPage() {
                 potentialMatches.map((match) => {
                   const Icon = match.icon;
                   return (
-                    <div
+                    <Link
                       key={match.id}
-                      className="flex items-center gap-4 rounded-lg border border-[#c4d0ce] bg-white p-4 shadow-sm"
+                      href={match.href}
+                      className="flex items-center gap-4 rounded-lg border border-[#c4d0ce] bg-white p-4 shadow-sm transition hover:border-[#007a6c]"
                     >
                       <div className="flex size-[50px] items-center justify-center rounded-md bg-[#e0e4e5] text-[#007a6c]">
                         <Icon className="size-7" />
@@ -389,7 +423,7 @@ export default function DashboardPage() {
                           <span className="truncate">{match.detail}</span>
                         </p>
                       </div>
-                    </div>
+                    </Link>
                   );
                 })
               )}

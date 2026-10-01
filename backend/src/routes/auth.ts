@@ -36,6 +36,8 @@ const loginLimiter = rateLimit({
 
 const registerSchema = z.object({
   displayName: z.string().trim().min(2).max(120),
+  studentStaffId: z.string().trim().min(3).max(40),
+  department: z.string().trim().min(1).max(120),
   email: z.string().trim().email().max(320),
   password: passwordSchema,
 });
@@ -48,6 +50,7 @@ const loginSchema = z.object({
 const updateProfileSchema = z
   .object({
     displayName: z.string().trim().min(2).max(120).optional(),
+    department: z.string().trim().min(1).max(120).optional(),
     currentPassword: z.string().min(1).max(72).optional(),
     newPassword: passwordSchema.optional(),
   })
@@ -60,10 +63,16 @@ function normalizeEmail(email: string): string {
   return email.trim().toLowerCase();
 }
 
+function normalizeStudentStaffId(value: string): string {
+  return value.trim().toUpperCase();
+}
+
 function userView(user: {
   id: string;
   email: string;
   displayName: string;
+  studentStaffId: string | null;
+  department: string | null;
   role: string;
   createdAt: Date;
 }) {
@@ -71,6 +80,8 @@ function userView(user: {
     id: user.id,
     email: user.email,
     displayName: user.displayName,
+    studentStaffId: user.studentStaffId ?? undefined,
+    department: user.department ?? undefined,
     role: user.role,
     createdAt: user.createdAt.toISOString(),
   };
@@ -79,20 +90,36 @@ function userView(user: {
 authRouter.post("/register", authLimiter, async (req, res) => {
   const input = registerSchema.parse(req.body);
   const email = normalizeEmail(input.email);
+  const studentStaffId = normalizeStudentStaffId(input.studentStaffId);
 
-  const existing = await prisma.user.findUnique({ where: { email }, select: { id: true } });
-  if (existing) throw new AppError(409, "An account with that email already exists.");
+  const existing = await prisma.user.findFirst({
+    where: { OR: [{ email }, { studentStaffId }] },
+    select: { email: true, studentStaffId: true },
+  });
+  if (existing?.email === email) {
+    throw new AppError(409, "An account with that email already exists.");
+  }
+  if (existing?.studentStaffId === studentStaffId) {
+    throw new AppError(409, "An account with that student or staff ID already exists.");
+  }
 
   const user = await prisma.user.create({
     data: {
       email,
       displayName: input.displayName,
+      studentStaffId,
+      department: input.department,
       passwordHash: await hashPassword(input.password),
       role: "student",
     },
   });
 
-  void writeAudit(req, "auth.register", "user", user.id, { email: user.email, role: "student" });
+  void writeAudit(req, "auth.register", "user", user.id, {
+    email: user.email,
+    studentStaffId: user.studentStaffId,
+    department: user.department,
+    role: "student",
+  });
   res.status(201).json({ data: userView(user), message: "Account created." });
 });
 
@@ -174,6 +201,7 @@ authRouter.patch("/me", requireAuth, async (req, res) => {
     where: { id: userId },
     data: {
       ...(input.displayName !== undefined ? { displayName: input.displayName } : {}),
+      ...(input.department !== undefined ? { department: input.department } : {}),
       ...(passwordHash ? { passwordHash } : {}),
     },
   });
@@ -189,6 +217,7 @@ authRouter.patch("/me", requireAuth, async (req, res) => {
 
   void writeAudit(req, "auth.profile_updated", "user", userId, {
     displayNameChanged: input.displayName !== undefined,
+    departmentChanged: input.department !== undefined,
     passwordChanged: Boolean(passwordHash),
   });
   res.json({ data: userView(user) });
@@ -197,17 +226,18 @@ authRouter.patch("/me", requireAuth, async (req, res) => {
 authRouter.delete("/me", requireAuth, async (req, res) => {
   const userId = authenticatedUserId(req);
 
-  const [foundReportsWithClaims, officerHandovers] = await Promise.all([
+  const [foundReportsWithClaims, claimantClaims, officerHandovers] = await Promise.all([
     prisma.foundReport.count({
       where: {
         finderUserId: userId,
         claims: { some: {} },
       },
     }),
+    prisma.claim.count({ where: { claimantUserId: userId } }),
     prisma.handover.count({ where: { officerUserId: userId } }),
   ]);
 
-  if (foundReportsWithClaims > 0 || officerHandovers > 0) {
+  if (foundReportsWithClaims > 0 || claimantClaims > 0 || officerHandovers > 0) {
     throw new AppError(
       409,
       "This account has custody or handover records that must be reassigned before deletion.",

@@ -94,16 +94,17 @@ export default function RegisterPage() {
 
   const email = useWatch({ control: form.control, name: "email" });
   const confirmPasswordState = form.getFieldState("confirmPassword", form.formState);
-  const emailLooksInstitutional = /@[^@\s]+\.[^@\s]+$/.test(email);
+  const emailFormatValid = /@[^@\s]+\.[^@\s]+$/.test(email);
 
   const onSubmit = async (values: FormValues) => {
     setIsLoading(true);
     try {
       await authApi.register({
         displayName: values.displayName,
+        studentStaffId: values.studentStaffId,
+        department: values.department,
         email: values.email,
         password: values.password,
-        role: "student",
       });
       toast.success("Account created! Please log in.");
       router.push("/login");
@@ -165,7 +166,7 @@ export default function RegisterPage() {
             </div>
 
             <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="mt-6 space-y-5">
+              <form method="post" onSubmit={form.handleSubmit(onSubmit)} className="mt-6 space-y-5">
                 <FormField
                   control={form.control}
                   name="displayName"
@@ -248,24 +249,25 @@ export default function RegisterPage() {
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel className="text-sm font-bold text-[#101417]">
-                        University Email
+                        Email
                       </FormLabel>
                       <FormControl>
                         <div className="relative">
                           <Mail className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[#596366]" />
                           <Input
                             type="email"
-                            placeholder="jane.doe@university.edu"
+                            autoComplete="email"
+                            placeholder="name@example.edu"
                             className="h-10 rounded-md border-[#006d62] bg-white pl-10 pr-10 text-sm text-[#101417] placeholder:text-[#697477] focus-visible:border-[#007a6c] focus-visible:ring-[#007a6c]/20"
                             {...field}
                           />
-                          {emailLooksInstitutional && (
+                          {emailFormatValid && (
                             <CheckCircle2 className="absolute right-3 top-1/2 size-4 -translate-y-1/2 text-[#007a6c]" />
                           )}
                         </div>
                       </FormControl>
-                      {emailLooksInstitutional && (
-                        <p className="text-sm font-medium text-[#007a6c]">Email domain verified.</p>
+                      {emailFormatValid && (
+                        <p className="text-sm font-medium text-[#007a6c]">Email format looks valid.</p>
                       )}
                       <FormMessage />
                     </FormItem>
@@ -286,6 +288,7 @@ export default function RegisterPage() {
                             <LockKeyhole className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[#596366]" />
                             <Input
                               type={showPassword ? "text" : "password"}
+                              autoComplete="new-password"
                               placeholder="********"
                               className="h-10 rounded-md border-[#b8c6c4] bg-white px-10 text-sm tracking-[0.12em] text-[#101417] placeholder:text-[#697477] focus-visible:border-[#007a6c] focus-visible:ring-[#007a6c]/20"
                               {...field}
@@ -326,6 +329,7 @@ export default function RegisterPage() {
                             />
                             <Input
                               type={showConfirmPassword ? "text" : "password"}
+                              autoComplete="new-password"
                               placeholder="******"
                               className={`h-10 rounded-md bg-white px-10 text-sm tracking-[0.12em] text-[#101417] placeholder:text-[#697477] ${
                                 confirmPasswordState.error
@@ -369,15 +373,7 @@ export default function RegisterPage() {
                           className="mt-1 size-4 rounded border-[#b8c6c4] accent-[#007a6c]"
                         />
                         <span>
-                          I agree to the{" "}
-                          <Link href="/register" className="font-bold text-[#006d62]">
-                            Institutional Policy
-                          </Link>{" "}
-                          and{" "}
-                          <Link href="/register" className="font-bold text-[#006d62]">
-                            Data Handling Guidelines
-                          </Link>
-                          .
+                          I confirm that the information provided is accurate and agree to the institution&apos;s applicable recovery and data-handling policies.
                         </span>
                       </label>
                       <FormMessage />
@@ -408,15 +404,7 @@ export default function RegisterPage() {
           </div>
 
           <footer className="mx-auto mt-5 max-w-[590px] text-center text-xs text-[#273235]">
-            <p>&copy; 2024 Institutional Recovery Network. All rights reserved.</p>
-            <div className="mt-3 flex justify-center gap-5">
-              <Link href="/register" className="hover:text-[#006d62]">
-                Help Center
-              </Link>
-              <Link href="/register" className="hover:text-[#006d62]">
-                Contact IT
-              </Link>
-            </div>
+            <p>Institutional Recovery Network</p>
           </footer>
         </div>
       </section>

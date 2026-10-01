@@ -37,6 +37,41 @@ type CombinedItem =
   | ({ type: "lost" } & LostReport)
   | ({ type: "found" } & FoundReport);
 
+async function loadAllLostReports(): Promise<LostReport[]> {
+  const rows: LostReport[] = [];
+  let offset = 0;
+  const limit = 200;
+  while (true) {
+    const res = await lostReportsApi.list({ limit, offset });
+    rows.push(...res.data.data);
+    if (rows.length >= res.data.total || res.data.data.length === 0) return rows;
+    offset += res.data.data.length;
+  }
+}
+
+async function loadAllFoundReports(): Promise<FoundReport[]> {
+  const rows: FoundReport[] = [];
+  let offset = 0;
+  const limit = 200;
+  while (true) {
+    const res = await foundReportsApi.list({ limit, offset });
+    rows.push(...res.data.data);
+    if (rows.length >= res.data.total || res.data.data.length === 0) return rows;
+    offset += res.data.data.length;
+  }
+}
+
+function matchesKeyword(item: CombinedItem, keyword: string): boolean {
+  const term = keyword.trim().toLowerCase();
+  if (!term) return true;
+  return (
+    item.id.toLowerCase().includes(term) ||
+    item.itemTitle.toLowerCase().includes(term) ||
+    (item.description?.toLowerCase().includes(term) ?? false) ||
+    (item.brand?.toLowerCase().includes(term) ?? false)
+  );
+}
+
 export default function SearchPage() {
   const [keyword, setKeyword] = useState("");
   const [category, setCategory] = useState<ItemCategory | "">("");
@@ -50,20 +85,22 @@ export default function SearchPage() {
   useEffect(() => {
     const load = async () => {
       try {
-        const [lostRes, foundRes] = await Promise.all([
-          lostReportsApi.list({ limit: 500 }),
-          foundReportsApi.list({ limit: 500 }),
+        const [lostRows, foundRows] = await Promise.all([
+          loadAllLostReports(),
+          loadAllFoundReports(),
         ]);
         const combined: CombinedItem[] = [
-          ...lostRes.data.data.map((r) => ({ ...r, type: "lost" as const })),
-          ...foundRes.data.data.map((r) => ({ ...r, type: "found" as const })),
+          ...lostRows.map((r) => ({ ...r, type: "lost" as const })),
+          ...foundRows.map((r) => ({ ...r, type: "found" as const })),
         ].sort((a, b) => {
           const dateA = a.type === "lost" ? a.dateLost : a.dateFound;
           const dateB = b.type === "lost" ? b.dateLost : b.dateFound;
           return dateB.localeCompare(dateA);
         });
+        const initialKeyword = new URLSearchParams(window.location.search).get("q")?.trim() ?? "";
+        setKeyword(initialKeyword);
         setAllItems(combined);
-        setFiltered(combined);
+        setFiltered(initialKeyword ? combined.filter((item) => matchesKeyword(item, initialKeyword)) : combined);
       } catch {
         toast.error("Failed to load items.");
       } finally {
@@ -77,15 +114,7 @@ export default function SearchPage() {
     let result = allItems;
     if (typeFilter) result = result.filter((r) => r.type === typeFilter);
     if (category) result = result.filter((r) => r.category === category);
-    if (keyword) {
-      const kw = keyword.toLowerCase();
-      result = result.filter(
-        (r) =>
-          r.itemTitle.toLowerCase().includes(kw) ||
-          (r.description?.toLowerCase().includes(kw) ?? false) ||
-          (r.brand?.toLowerCase().includes(kw) ?? false)
-      );
-    }
+    if (keyword) result = result.filter((item) => matchesKeyword(item, keyword));
     if (from) {
       result = result.filter((r) => {
         const d = r.type === "lost" ? r.dateLost : r.dateFound;

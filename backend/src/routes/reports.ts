@@ -246,6 +246,8 @@ lostReportsRouter.patch("/:id", async (req, res) => {
   const row = await prisma.lostReport.update({ where: { id }, data: input });
   if (row.status === "open") {
     void recomputeMatchesForLost(row.id).catch((error) => console.error("match_recompute_failed", error));
+  } else {
+    await prisma.matchCandidate.deleteMany({ where: { lostReportId: row.id } });
   }
   void writeAudit(req, "lost_report.updated", "lost_report", row.id, { status: row.status });
   res.json({ data: lostView(row) });
@@ -363,6 +365,8 @@ foundReportsRouter.patch("/:id", async (req, res) => {
   const row = await prisma.foundReport.update({ where: { id }, data: input });
   if (["open", "verified"].includes(row.status)) {
     void recomputeMatchesForFound(row.id).catch((error) => console.error("match_recompute_failed", error));
+  } else {
+    await prisma.matchCandidate.deleteMany({ where: { foundReportId: row.id } });
   }
   void writeAudit(req, "found_report.updated", "found_report", row.id, { status: row.status });
   res.json({ data: foundView(row) });

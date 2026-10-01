@@ -11,7 +11,6 @@ import {
   ClipboardCheck,
   ClipboardList,
   FileText,
-  Filter,
   Inbox,
   Laptop,
   MapPin,
@@ -62,6 +61,73 @@ const STATUS_LABELS: Record<ClaimStatus, string> = {
   rejected: "Rejected",
   completed: "Returned",
 };
+
+const REVIEW_STATUSES: ClaimStatus[] = [
+  "pending",
+  "under_review",
+  "approved",
+  "rejected",
+  "completed",
+];
+
+async function loadAllFoundReportsForClaims(): Promise<FoundReport[]> {
+  const rows: FoundReport[] = [];
+  let offset = 0;
+  const limit = 200;
+  while (true) {
+    const res = await foundReportsApi.list({ limit, offset });
+    rows.push(...res.data.data);
+    if (rows.length >= res.data.total || res.data.data.length === 0) return rows;
+    offset += res.data.data.length;
+  }
+}
+
+async function loadAllLostReportsForClaims(): Promise<LostReport[]> {
+  const rows: LostReport[] = [];
+  let offset = 0;
+  const limit = 200;
+  while (true) {
+    const res = await lostReportsApi.list({ limit, offset });
+    rows.push(...res.data.data);
+    if (rows.length >= res.data.total || res.data.data.length === 0) return rows;
+    offset += res.data.data.length;
+  }
+}
+
+async function loadAllMyClaims(): Promise<Claim[]> {
+  const rows: Claim[] = [];
+  let offset = 0;
+  const limit = 100;
+  while (true) {
+    const res = await claimsApi.listMine({ limit, offset });
+    rows.push(...res.data.data);
+    if (rows.length >= res.data.total || res.data.data.length === 0) return rows;
+    offset += res.data.data.length;
+  }
+}
+
+async function loadClaimsForStatus(status: ClaimStatus): Promise<Claim[]> {
+  const rows: Claim[] = [];
+  let offset = 0;
+  const limit = 100;
+
+  while (true) {
+    const res = await claimsApi.listReviewQueue({ status, limit, offset });
+    rows.push(...res.data.data);
+    if (rows.length >= res.data.total || res.data.data.length === 0) return rows;
+    offset += res.data.data.length;
+  }
+}
+
+async function loadReviewerClaims(): Promise<Claim[]> {
+  const results = await Promise.allSettled(REVIEW_STATUSES.map(loadClaimsForStatus));
+  const merged = new Map<string, Claim>();
+  for (const result of results) {
+    if (result.status !== "fulfilled") continue;
+    for (const claim of result.value) merged.set(claim.id, claim);
+  }
+  return Array.from(merged.values());
+}
 
 function shortClaimId(id: string) {
   return `C-${id.slice(0, 8).toUpperCase()}`;
@@ -157,32 +223,18 @@ export default function ClaimsPage() {
     const load = async () => {
       setIsLoading(true);
       try {
-        const claimRequest = isReviewer
-          ? Promise.allSettled([
-              claimsApi.listReviewQueue({ status: "pending", limit: 100 }),
-              claimsApi.listReviewQueue({ status: "under_review", limit: 100 }),
-            ]).then((results) => {
-              const merged = new Map<string, Claim>();
-              for (const result of results) {
-                if (result.status !== "fulfilled") continue;
-                for (const claim of result.value.data.data) {
-                  merged.set(claim.id, claim);
-                }
-              }
-              return Array.from(merged.values());
-            })
-          : claimsApi.listMine({ limit: 100 }).then((res) => res.data.data);
+        const claimRequest = isReviewer ? loadReviewerClaims() : loadAllMyClaims();
 
-        const [claimRows, foundResult, lostResult] = await Promise.all([
+        const [claimRows, foundRows, lostRows] = await Promise.all([
           claimRequest,
-          foundReportsApi.list({ limit: 250 }),
-          lostReportsApi.list({ limit: 250 }),
+          loadAllFoundReportsForClaims(),
+          loadAllLostReportsForClaims(),
         ]);
 
         if (!isMounted) return;
         setClaims(claimRows);
-        setFoundReports(foundResult.data.data);
-        setLostReports(lostResult.data.data);
+        setFoundReports(foundRows);
+        setLostReports(lostRows);
       } catch {
         if (isMounted) toast.error("Failed to load claims.");
       } finally {
@@ -219,16 +271,7 @@ export default function ClaimsPage() {
   }, [claimViews]);
 
   const reloadAfterReview = async () => {
-    const res = await Promise.allSettled([
-      claimsApi.listReviewQueue({ status: "pending", limit: 100 }),
-      claimsApi.listReviewQueue({ status: "under_review", limit: 100 }),
-    ]);
-    const merged = new Map<string, Claim>();
-    for (const result of res) {
-      if (result.status !== "fulfilled") continue;
-      for (const claim of result.value.data.data) merged.set(claim.id, claim);
-    }
-    setClaims(Array.from(merged.values()));
+    setClaims(await loadReviewerClaims());
   };
 
   const handleReview = async () => {
@@ -270,7 +313,6 @@ export default function ClaimsPage() {
           setSearch={setSearch}
           statusFilter={statusFilter}
           setStatusFilter={setStatusFilter}
-          totalPending={stats.pending}
         />
       ) : (
         <StudentClaimsView
@@ -457,7 +499,6 @@ function ReviewQueueView({
   setSearch,
   statusFilter,
   setStatusFilter,
-  totalPending,
 }: {
   claims: ClaimView[];
   isLoading: boolean;
@@ -466,7 +507,6 @@ function ReviewQueueView({
   setSearch: (value: string) => void;
   statusFilter: "all" | ClaimStatus;
   setStatusFilter: (value: "all" | ClaimStatus) => void;
-  totalPending: number;
 }) {
   return (
     <>
@@ -479,26 +519,7 @@ function ReviewQueueView({
             Review and process pending recovery requests.
           </p>
         </div>
-        <div className="flex flex-wrap gap-3">
-          <button
-            type="button"
-            onClick={() => setStatusFilter("all")}
-            className={cn(
-              "h-12 rounded-full border px-5 text-lg font-bold transition",
-              statusFilter === "all"
-                ? "border-transparent bg-[#e6e3e1] text-[#5a5654]"
-                : "border-[#b8c6c4] bg-white text-[#101417]",
-            )}
-          >
-            All Pending ({totalPending})
-          </button>
-          <button type="button" className="h-12 rounded-full border border-[#b8c6c4] bg-white px-5 text-lg font-bold">
-            High Confidence
-          </button>
-          <button type="button" className="h-12 rounded-full border border-[#b8c6c4] bg-white px-5 text-lg font-bold">
-            Requires Follow-up
-          </button>
-        </div>
+
       </div>
 
       <div className="mt-8 max-w-[560px]">
@@ -565,13 +586,7 @@ function SearchAndFilter({
         <option value="rejected">Rejected</option>
         <option value="completed">Returned</option>
       </select>
-      <button
-        type="button"
-        className="inline-flex size-12 items-center justify-center rounded-lg border border-[#b8c6c4] bg-white text-[#101417] shadow-sm"
-        aria-label="More filters"
-      >
-        <Filter className="size-5" />
-      </button>
+
     </div>
   );
 }

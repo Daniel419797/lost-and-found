@@ -11,14 +11,10 @@ import {
   Bell,
   Calendar,
   Clock3,
-  Contact,
   FileText,
   ImagePlus,
   type LucideIcon,
-  Mail,
   MapPin,
-  MessageSquare,
-  Navigation,
   Search,
   Send,
   UserCircle,
@@ -45,7 +41,6 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { lostReportsApi } from "@/services/lostReports";
 import { uploadsApi } from "@/services/uploads";
-import { cn } from "@/lib/utils";
 import type { ItemCategory } from "@/types";
 
 const CATEGORIES: ItemCategory[] = [
@@ -87,14 +82,12 @@ const schema = z.object({
 });
 
 type FormValues = z.infer<typeof schema>;
-type ContactPreference = "Email" | "SMS Text" | "App Push";
 
 export default function ReportLostItemPage() {
   const router = useRouter();
   const [selectedPhoto, setSelectedPhoto] = useState<File | null>(null);
   const [photoPreviewUrl, setPhotoPreviewUrl] = useState("");
   const [photoInputKey, setPhotoInputKey] = useState(0);
-  const [contactPreference, setContactPreference] = useState<ContactPreference>("Email");
   const [isSubmitting, setIsSubmitting] = useState(false);
   const photoPreviewUrlRef = useRef("");
 
@@ -172,7 +165,6 @@ export default function ReportLostItemPage() {
       const details = [
         values.description,
         values.approximateTime ? `Approximate time lost: ${values.approximateTime}` : "",
-        `Contact preference: ${contactPreference}`,
       ]
         .filter(Boolean)
         .join("\n\n");
@@ -408,45 +400,9 @@ export default function ReportLostItemPage() {
                   </FormItem>
                 )}
               />
-              <div className="mt-5 overflow-hidden rounded-lg border border-[#c9d4d2] bg-[#dbe7e5]">
-                <div className="relative h-[185px] bg-[linear-gradient(135deg,#9ac1bd_0_20%,#e7efef_20%_35%,#cfe3c1_35%_48%,#eef2ed_48%_62%,#b9d7cc_62%_75%,#f0f2ed_75%_100%)]">
-                  <div className="absolute inset-x-[14%] inset-y-0 bg-white/45" />
-                  <div className="absolute left-1/2 top-6 flex size-20 -translate-x-1/2 items-center justify-center rounded-full bg-[#42aaa6] text-white shadow-lg">
-                    <MapPin className="size-12 fill-current" />
-                  </div>
-                  <button
-                    type="button"
-                    className="absolute bottom-4 left-4 inline-flex h-9 items-center gap-2 rounded-md bg-white px-4 text-sm text-[#182224] shadow-sm"
-                  >
-                    <Navigation className="size-4 text-[#007a6c]" />
-                    Select area on map
-                  </button>
-                </div>
-              </div>
-            </section>
-
-            <section className="rounded-xl border border-[#b8c6c4] bg-white p-6">
-              <SectionTitle icon={Contact} title="Contact Preference" />
-              <div className="mt-5 grid gap-4 sm:grid-cols-3">
-                <ContactButton
-                  active={contactPreference === "Email"}
-                  icon={Mail}
-                  label="Email"
-                  onClick={() => setContactPreference("Email")}
-                />
-                <ContactButton
-                  active={contactPreference === "SMS Text"}
-                  icon={MessageSquare}
-                  label="SMS Text"
-                  onClick={() => setContactPreference("SMS Text")}
-                />
-                <ContactButton
-                  active={contactPreference === "App Push"}
-                  icon={Bell}
-                  label="App Push"
-                  onClick={() => setContactPreference("App Push")}
-                />
-              </div>
+              <p className="mt-3 text-sm text-[#505a5c]">
+                Enter the most specific location you remember, such as a building, floor, room, or nearby landmark.
+              </p>
             </section>
 
             <div className="flex flex-col items-center gap-5 pt-4">
@@ -475,33 +431,5 @@ function SectionTitle({ icon: Icon, title }: { icon: LucideIcon; title: string }
       <Icon className="size-5 text-[#007a6c]" />
       {title}
     </h2>
-  );
-}
-
-function ContactButton({
-  active,
-  icon: Icon,
-  label,
-  onClick,
-}: {
-  active: boolean;
-  icon: LucideIcon;
-  label: ContactPreference;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className={cn(
-        "flex h-20 flex-col items-center justify-center gap-2 rounded-lg border text-sm font-medium transition",
-        active
-          ? "border-[#007a6c] bg-[#e3f1ef] text-[#006d62]"
-          : "border-[#b8c6c4] bg-white text-[#101417] hover:border-[#007a6c]",
-      )}
-    >
-      <Icon className="size-5" />
-      {label}
-    </button>
   );
 }
