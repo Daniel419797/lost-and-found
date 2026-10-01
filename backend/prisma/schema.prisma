@@ -1,0 +1,190 @@
+generator client {
+  provider            = "prisma-client"
+  output              = "../src/generated/prisma"
+  moduleFormat        = "esm"
+  importFileExtension = "js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id                 String           @id @default(uuid()) @db.Uuid
+  email              String           @unique @db.VarChar(320)
+  displayName        String           @map("display_name") @db.VarChar(120)
+  passwordHash       String?          @map("password_hash") @db.VarChar(255)
+  role               String           @default("student") @db.VarChar(32)
+  createdAt          DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+  refreshSessions    RefreshSession[]
+  lostReports        LostReport[]     @relation("LostReporter")
+  foundReports       FoundReport[]    @relation("FoundFinder")
+  claims             Claim[]          @relation("Claimant")
+  reviewedClaims     Claim[]          @relation("ClaimReviewer")
+  officerHandovers   Handover[]       @relation("HandoverOfficer")
+  completedHandovers Handover[]       @relation("HandoverCompleter")
+  notifications      Notification[]   @relation("NotificationRecipient")
+  auditLogs          AuditLog[]       @relation("AuditActor")
+
+  @@map("users")
+}
+
+model RefreshSession {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  tokenHash String    @unique @map("token_hash") @db.Char(64)
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz(3)
+  revokedAt DateTime? @map("revoked_at") @db.Timestamptz(3)
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, expiresAt])
+  @@map("refresh_sessions")
+}
+
+model LostReport {
+  id             String           @id @default(uuid()) @db.Uuid
+  reporterUserId String           @map("reporter_user_id") @db.Uuid
+  itemTitle      String           @map("item_title") @db.VarChar(180)
+  category       String           @db.VarChar(80)
+  color          String?          @db.VarChar(80)
+  brand          String?          @db.VarChar(120)
+  description    String?
+  imageUrls      String[]         @default([]) @map("image_urls")
+  locationLost   String           @map("location_lost") @db.VarChar(180)
+  dateLost       DateTime         @map("date_lost") @db.Date
+  status         String           @default("open") @db.VarChar(32)
+  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt      DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+  reporter       User             @relation("LostReporter", fields: [reporterUserId], references: [id], onDelete: Cascade)
+  claims         Claim[]
+  matches        MatchCandidate[]
+
+  @@index([status, createdAt])
+  @@index([category, status])
+  @@index([reporterUserId, createdAt])
+  @@map("lost_reports")
+}
+
+model FoundReport {
+  id              String           @id @default(uuid()) @db.Uuid
+  finderUserId    String           @map("finder_user_id") @db.Uuid
+  itemTitle       String           @map("item_title") @db.VarChar(180)
+  category        String           @db.VarChar(80)
+  color           String?          @db.VarChar(80)
+  brand           String?          @db.VarChar(120)
+  description     String?
+  imageUrls       String[]         @default([]) @map("image_urls")
+  locationFound   String           @map("location_found") @db.VarChar(180)
+  dateFound       DateTime         @map("date_found") @db.Date
+  custodyLocation String?          @map("custody_location") @db.VarChar(180)
+  status          String           @default("open") @db.VarChar(32)
+  createdAt       DateTime         @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt       DateTime         @updatedAt @map("updated_at") @db.Timestamptz(3)
+  finder          User             @relation("FoundFinder", fields: [finderUserId], references: [id], onDelete: Cascade)
+  claims          Claim[]
+  matches         MatchCandidate[]
+
+  @@index([status, createdAt])
+  @@index([category, status])
+  @@index([finderUserId, createdAt])
+  @@map("found_reports")
+}
+
+model Claim {
+  id                 String      @id @default(uuid()) @db.Uuid
+  linkedLostReportId String?     @map("linked_lost_report_id") @db.Uuid
+  foundReportId      String      @map("found_report_id") @db.Uuid
+  claimantUserId     String      @map("claimant_user_id") @db.Uuid
+  status             String      @default("pending") @db.VarChar(32)
+  evidenceText       String      @map("evidence_text")
+  reviewedByUserId   String?     @map("reviewed_by_user_id") @db.Uuid
+  decisionReason     String?     @map("decision_reason")
+  reviewedAt         DateTime?   @map("reviewed_at") @db.Timestamptz(3)
+  createdAt          DateTime    @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt          DateTime    @updatedAt @map("updated_at") @db.Timestamptz(3)
+  linkedLostReport   LostReport? @relation(fields: [linkedLostReportId], references: [id], onDelete: SetNull)
+  foundReport        FoundReport @relation(fields: [foundReportId], references: [id], onDelete: Restrict)
+  claimant           User        @relation("Claimant", fields: [claimantUserId], references: [id], onDelete: Cascade)
+  reviewedBy         User?       @relation("ClaimReviewer", fields: [reviewedByUserId], references: [id], onDelete: SetNull)
+  handover           Handover?
+
+  @@unique([foundReportId, claimantUserId])
+  @@index([claimantUserId, createdAt])
+  @@index([status, createdAt])
+  @@index([foundReportId, status])
+  @@map("claims")
+}
+
+model MatchCandidate {
+  id             String      @id @default(uuid()) @db.Uuid
+  lostReportId   String      @map("lost_report_id") @db.Uuid
+  foundReportId  String      @map("found_report_id") @db.Uuid
+  score          Int
+  factorsJson    Json        @map("factors_json")
+  computedAt     DateTime    @default(now()) @map("computed_at") @db.Timestamptz(3)
+  uniquePairHash String      @unique @map("unique_pair_hash") @db.Char(64)
+  notifiedAt     DateTime?   @map("notified_at") @db.Timestamptz(3)
+  lostReport     LostReport  @relation(fields: [lostReportId], references: [id], onDelete: Cascade)
+  foundReport    FoundReport @relation(fields: [foundReportId], references: [id], onDelete: Cascade)
+
+  @@unique([lostReportId, foundReportId])
+  @@index([lostReportId, score])
+  @@index([foundReportId, score])
+  @@map("match_candidates")
+}
+
+model Handover {
+  id                String    @id @default(uuid()) @db.Uuid
+  claimId           String    @unique @map("claim_id") @db.Uuid
+  officerUserId     String    @map("officer_user_id") @db.Uuid
+  status            String    @default("ready") @db.VarChar(32)
+  handoverPoint     String    @map("handover_point") @db.VarChar(180)
+  handoverTime      DateTime  @map("handover_time") @db.Timestamptz(3)
+  completedAt       DateTime? @map("completed_at") @db.Timestamptz(3)
+  completedByUserId String?   @map("completed_by_user_id") @db.Uuid
+  evidenceUrl       String?   @map("evidence_url")
+  notes             String?
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamptz(3)
+  updatedAt         DateTime  @updatedAt @map("updated_at") @db.Timestamptz(3)
+  claim             Claim     @relation(fields: [claimId], references: [id], onDelete: Cascade)
+  officer           User      @relation("HandoverOfficer", fields: [officerUserId], references: [id], onDelete: Restrict)
+  completedBy       User?     @relation("HandoverCompleter", fields: [completedByUserId], references: [id], onDelete: SetNull)
+
+  @@index([status, handoverTime])
+  @@map("handovers")
+}
+
+model Notification {
+  id              String   @id @default(uuid()) @db.Uuid
+  recipientUserId String   @map("recipient_user_id") @db.Uuid
+  type            String   @db.VarChar(64)
+  title           String   @db.VarChar(180)
+  body            String
+  isRead          Boolean  @default(false) @map("is_read")
+  metaJson        Json?    @map("meta_json")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  recipient       User     @relation("NotificationRecipient", fields: [recipientUserId], references: [id], onDelete: Cascade)
+
+  @@index([recipientUserId, isRead, createdAt])
+  @@map("notifications")
+}
+
+model AuditLog {
+  id         String   @id @default(uuid()) @db.Uuid
+  action     String   @db.VarChar(100)
+  resource   String?  @db.VarChar(100)
+  resourceId String?  @map("resource_id") @db.VarChar(100)
+  details    Json
+  userId     String?  @map("user_id") @db.Uuid
+  ipAddress  String?  @map("ip_address") @db.VarChar(80)
+  userAgent  String?  @map("user_agent")
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  user       User?    @relation("AuditActor", fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([createdAt])
+  @@index([action, createdAt])
+  @@index([userId, createdAt])
+  @@map("audit_logs")
+}

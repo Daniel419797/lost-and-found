@@ -1,5 +1,4 @@
 import api from "@/lib/api";
-import { buildLostFoundUrl, resolveProjectId } from "@/lib/project-api";
 
 export type AuditLogRow = {
   id: string;
@@ -23,8 +22,7 @@ export type AdminMetrics = {
 };
 
 export const adminApi = {
-  getAuditLogs: async (params?: {
-    projectId?: string;
+  getAuditLogs: (params?: {
     action?: string;
     resource_type?: string;
     resource_id?: string;
@@ -33,16 +31,11 @@ export const adminApi = {
     date_to?: string;
     limit?: number;
     offset?: number;
-  }) => {
-    const projectId = resolveProjectId(params?.projectId);
-    return api.get<{ data: { rows: AuditLogRow[]; total: number; hasMore: boolean } }>(
-      buildLostFoundUrl("/admin/audit-logs", projectId),
+  }) =>
+    api.get<{ data: { rows: AuditLogRow[]; total: number; hasMore: boolean } }>(
+      "/admin/audit-logs",
       { params },
-    );
-  },
+    ),
 
-  getMetrics: async (projectId?: string) => {
-    const resolvedProjectId = resolveProjectId(projectId);
-    return api.get<{ data: AdminMetrics }>(buildLostFoundUrl("/admin/metrics", resolvedProjectId));
-  },
+  getMetrics: () => api.get<{ data: AdminMetrics }>("/admin/metrics"),
 };

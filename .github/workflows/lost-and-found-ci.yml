@@ -1,0 +1,47 @@
+name: Lost and Found CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - "feat/**"
+
+jobs:
+  frontend:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm run typecheck
+      - run: npm run build
+        env:
+          NEXT_PUBLIC_API_URL: http://localhost:4000/api/v1
+
+  backend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: backend
+    env:
+      DIRECT_URL: postgresql://postgres:postgres@localhost:5432/lost_and_found
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/lost_and_found
+      JWT_SECRET: ci-only-secret-ci-only-secret-ci-only-secret-ci-only-secret-ci-only-secret
+      CORS_ORIGIN: http://localhost:3000
+      COOKIE_SECURE: "false"
+      COOKIE_SAME_SITE: lax
+      TRUST_PROXY: "false"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - run: npm install
+      - run: npm run typecheck
+      - run: npm test
+      - run: npm run build
