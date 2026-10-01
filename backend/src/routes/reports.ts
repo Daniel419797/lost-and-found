@@ -1,4 +1,5 @@
 import { Router } from "express";
+import { env, storageConfigured } from "../config.js";
 import type { Prisma } from "../generated/prisma/client.js";
 import { z } from "zod";
 import { writeAudit } from "../lib/audit.js";
@@ -141,6 +142,18 @@ function isStaffRole(role: string): boolean {
   return ["staff", "admin", "super_admin"].includes(role);
 }
 
+function assertManagedImageUrls(urls: string[] | undefined): void {
+  if (!urls?.length) return;
+  if (!storageConfigured || !env.STORAGE_PUBLIC_BASE_URL) {
+    throw new AppError(503, "Image storage is not configured.");
+  }
+
+  const managedPrefix = `${env.STORAGE_PUBLIC_BASE_URL.replace(/\/+$/, "")}/lost-and-found/`;
+  if (urls.some((url) => !url.startsWith(managedPrefix))) {
+    throw new AppError(400, "Report images must be uploaded through the application.");
+  }
+}
+
 lostReportsRouter.get("/", async (req, res) => {
   const query = lostQuerySchema.parse(req.query);
   const userId = authenticatedUserId(req);
@@ -192,6 +205,7 @@ lostReportsRouter.get("/:id", async (req, res) => {
 
 lostReportsRouter.post("/", async (req, res) => {
   const input = lostCreateSchema.parse(req.body);
+  assertManagedImageUrls(input.imageUrls);
   const userId = authenticatedUserId(req);
 
   const row = await prisma.lostReport.create({
@@ -217,6 +231,7 @@ lostReportsRouter.post("/", async (req, res) => {
 lostReportsRouter.patch("/:id", async (req, res) => {
   const id = uuidSchema.parse(req.params.id);
   const input = lostUpdateSchema.parse(req.body);
+  assertManagedImageUrls(input.imageUrls);
   const userId = authenticatedUserId(req);
   const current = await prisma.lostReport.findUnique({ where: { id } });
   if (!current) throw new AppError(404, "Lost report not found.");
@@ -306,6 +321,7 @@ foundReportsRouter.get("/:id", async (req, res) => {
 
 foundReportsRouter.post("/", async (req, res) => {
   const input = foundCreateSchema.parse(req.body);
+  assertManagedImageUrls(input.imageUrls);
   const userId = authenticatedUserId(req);
 
   const row = await prisma.foundReport.create({
@@ -332,6 +348,7 @@ foundReportsRouter.post("/", async (req, res) => {
 foundReportsRouter.patch("/:id", async (req, res) => {
   const id = uuidSchema.parse(req.params.id);
   const input = foundUpdateSchema.parse(req.body);
+  assertManagedImageUrls(input.imageUrls);
   const userId = authenticatedUserId(req);
   const current = await prisma.foundReport.findUnique({ where: { id } });
   if (!current) throw new AppError(404, "Found report not found.");

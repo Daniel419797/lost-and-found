@@ -135,7 +135,9 @@ api.interceptors.response.use(
         return api.request(config);
       } catch {
         localStorage.removeItem("token");
-        if (window.location.pathname !== "/login") window.location.href = "/login";
+        if (window.location.pathname !== "/login") {
+          window.location.replace(new URL("/login", window.location.origin).toString());
+        }
       }
     }
 

@@ -16,6 +16,27 @@ const extensionByType: Record<string, string> = {
   "image/webp": "webp",
 };
 
+function detectImageMime(buffer: Buffer): string | null {
+  if (buffer.length >= 3 && buffer[0] === 0xff && buffer[1] === 0xd8 && buffer[2] === 0xff) {
+    return "image/jpeg";
+  }
+
+  const pngSignature = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
+  if (buffer.length >= pngSignature.length && pngSignature.every((byte, index) => buffer[index] === byte)) {
+    return "image/png";
+  }
+
+  if (
+    buffer.length >= 12 &&
+    buffer.subarray(0, 4).toString("ascii") === "RIFF" &&
+    buffer.subarray(8, 12).toString("ascii") === "WEBP"
+  ) {
+    return "image/webp";
+  }
+
+  return null;
+}
+
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 5 * 1024 * 1024, files: 1 },
@@ -44,8 +65,13 @@ uploadsRouter.post("/item-photo", upload.single("file"), async (req, res) => {
   if (!req.file) throw new AppError(400, "Image file is required.");
   if (!storageConfigured) throw new AppError(503, "Image storage is not configured.");
 
+  const detectedContentType = detectImageMime(req.file.buffer);
+  if (!detectedContentType || detectedContentType !== req.file.mimetype) {
+    throw new AppError(400, "The uploaded file content does not match a supported image format.");
+  }
+
   const userId = authenticatedUserId(req);
-  const extension = extensionByType[req.file.mimetype] ?? "bin";
+  const extension = extensionByType[detectedContentType];
   const key = `lost-and-found/${userId}/${new Date().toISOString().slice(0, 10)}/${randomUUID()}.${extension}`;
 
   await storageClient().send(
@@ -53,7 +79,7 @@ uploadsRouter.post("/item-photo", upload.single("file"), async (req, res) => {
       Bucket: env.STORAGE_BUCKET!,
       Key: key,
       Body: req.file.buffer,
-      ContentType: req.file.mimetype,
+      ContentType: detectedContentType,
       CacheControl: "public, max-age=31536000, immutable",
     }),
   );
@@ -63,7 +89,7 @@ uploadsRouter.post("/item-photo", upload.single("file"), async (req, res) => {
     data: {
       url: `${base}/${key}`,
       fileName: key,
-      contentType: req.file.mimetype,
+      contentType: detectedContentType,
       size: req.file.size,
     },
   });

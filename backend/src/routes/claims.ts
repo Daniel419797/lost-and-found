@@ -1,4 +1,5 @@
 import { Router } from "express";
+import type { Prisma } from "../generated/prisma/client.js";
 import { z } from "zod";
 import { writeAudit } from "../lib/audit.js";
 import { prisma } from "../lib/prisma.js";
@@ -90,6 +91,20 @@ async function isReviewer(userId: string): Promise<boolean> {
   return Boolean(user && ["staff", "admin", "super_admin"].includes(user.role));
 }
 
+async function lockFoundReport(tx: Prisma.TransactionClient, foundReportId: string): Promise<void> {
+  const rows = await tx.$queryRaw<Array<{ id: string }>>`
+    SELECT "id" FROM "found_reports" WHERE "id" = ${foundReportId}::uuid FOR UPDATE
+  `;
+  if (rows.length === 0) throw new AppError(404, "Found report not found.");
+}
+
+async function lockHandover(tx: Prisma.TransactionClient, handoverId: string): Promise<void> {
+  const rows = await tx.$queryRaw<Array<{ id: string }>>`
+    SELECT "id" FROM "handovers" WHERE "id" = ${handoverId}::uuid FOR UPDATE
+  `;
+  if (rows.length === 0) throw new AppError(404, "Handover not found.");
+}
+
 claimsRouter.get("/my", async (req, res) => {
   const query = queueQuerySchema.parse(req.query);
   const userId = authenticatedUserId(req);
@@ -151,48 +166,53 @@ claimsRouter.post("/", async (req, res) => {
   const input = claimCreateSchema.parse(req.body);
   const userId = authenticatedUserId(req);
 
-  const found = await prisma.foundReport.findUnique({ where: { id: input.foundReportId } });
-  if (!found) throw new AppError(404, "Found report not found.");
-  if (!["open", "verified"].includes(found.status)) {
-    throw new AppError(409, "This item is no longer available for claims.");
-  }
-  if (found.finderUserId === userId) {
-    throw new AppError(409, "You cannot claim an item from your own found report.");
-  }
-
-  if (input.lostReportId) {
-    const lost = await prisma.lostReport.findUnique({ where: { id: input.lostReportId } });
-    if (!lost) throw new AppError(404, "Linked lost report not found.");
-    if (lost.reporterUserId !== userId) {
-      throw new AppError(403, "You can only link one of your own lost reports.");
+  const { row, found } = await prisma.$transaction(async (tx) => {
+    await lockFoundReport(tx, input.foundReportId);
+    const found = await tx.foundReport.findUnique({ where: { id: input.foundReportId } });
+    if (!found) throw new AppError(404, "Found report not found.");
+    if (!["open", "verified"].includes(found.status)) {
+      throw new AppError(409, "This item is no longer available for claims.");
     }
-  }
+    if (found.finderUserId === userId) {
+      throw new AppError(409, "You cannot claim an item from your own found report.");
+    }
 
-  const row = await prisma.claim.create({
-    data: {
-      foundReportId: input.foundReportId,
-      linkedLostReportId: input.lostReportId,
-      claimantUserId: userId,
-      evidenceText: input.description,
-      status: "pending",
-    },
-  });
+    if (input.lostReportId) {
+      const lost = await tx.lostReport.findUnique({ where: { id: input.lostReportId } });
+      if (!lost) throw new AppError(404, "Linked lost report not found.");
+      if (lost.reporterUserId !== userId) {
+        throw new AppError(403, "You can only link one of your own lost reports.");
+      }
+    }
 
-  const staff = await prisma.user.findMany({
-    where: { role: { in: ["staff", "admin", "super_admin"] } },
-    select: { id: true },
-  });
-  if (staff.length > 0) {
-    await prisma.notification.createMany({
-      data: staff.map((member) => ({
-        recipientUserId: member.id,
-        type: "claim_submitted",
-        title: "New ownership claim",
-        body: `A new claim was submitted for "${found.itemTitle}".`,
-        metaJson: { claimId: row.id, foundReportId: found.id },
-      })),
+    const row = await tx.claim.create({
+      data: {
+        foundReportId: input.foundReportId,
+        linkedLostReportId: input.lostReportId,
+        claimantUserId: userId,
+        evidenceText: input.description,
+        status: "pending",
+      },
     });
-  }
+
+    const staff = await tx.user.findMany({
+      where: { role: { in: ["staff", "admin", "super_admin"] } },
+      select: { id: true },
+    });
+    if (staff.length > 0) {
+      await tx.notification.createMany({
+        data: staff.map((member) => ({
+          recipientUserId: member.id,
+          type: "claim_submitted",
+          title: "New ownership claim",
+          body: `A new claim was submitted for "${found.itemTitle}".`,
+          metaJson: { claimId: row.id, foundReportId: found.id },
+        })),
+      });
+    }
+
+    return { row, found };
+  });
 
   void writeAudit(req, "claim.submitted", "claim", row.id, { foundReportId: found.id });
   res.status(201).json({ data: claimView(row) });
@@ -208,6 +228,13 @@ claimsRouter.patch(
     const reason = input.decisionReason ?? input.decision_reason ?? input.notes ?? "Decision recorded.";
 
     const result = await prisma.$transaction(async (tx) => {
+      const initial = await tx.claim.findUnique({
+        where: { id },
+        select: { foundReportId: true },
+      });
+      if (!initial) throw new AppError(404, "Claim not found.");
+
+      await lockFoundReport(tx, initial.foundReportId);
       const current = await tx.claim.findUnique({
         where: { id },
         include: { foundReport: true },
@@ -237,6 +264,10 @@ claimsRouter.patch(
           },
         });
         return claim;
+      }
+
+      if (!["open", "verified"].includes(current.foundReport.status)) {
+        throw new AppError(409, "This item already has an approved claim.");
       }
 
       const otherClaims = await tx.claim.findMany({
@@ -382,6 +413,7 @@ handoversRouter.patch(
     const actorId = authenticatedUserId(req);
 
     const handover = await prisma.$transaction(async (tx) => {
+      await lockHandover(tx, id);
       const current = await tx.handover.findUnique({
         where: { id },
         include: { claim: { include: { foundReport: true } } },
