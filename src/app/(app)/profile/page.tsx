@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { useForm } from "react-hook-form";
 import type { Resolver } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -24,6 +25,7 @@ import { newPasswordSchema } from "@/lib/passwordPolicy";
 
 const profileSchema = z.object({
   displayName: z.string().min(2, "Name must be at least 2 characters").max(100),
+  department: z.string().min(1, "Department is required").max(120),
 });
 
 const passwordFormSchema = z
@@ -41,16 +43,27 @@ type ProfileFormValues = z.infer<typeof profileSchema>;
 type PasswordFormValues = z.infer<typeof passwordFormSchema>;
 
 export default function ProfilePage() {
-  const { user, refreshUser } = useAuth();
+  const router = useRouter();
+  const { user, refreshUser, logout } = useAuth();
   const [isProfileSaving, setIsProfileSaving] = useState(false);
   const [isPasswordSaving, setIsPasswordSaving] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const profileForm = useForm<ProfileFormValues>({
     resolver: zodResolver(profileSchema) as Resolver<ProfileFormValues>,
     defaultValues: {
       displayName: user?.displayName ?? "",
+      department: user?.department ?? "",
     },
   });
+
+  useEffect(() => {
+    if (!user) return;
+    profileForm.reset({
+      displayName: user.displayName,
+      department: user.department ?? "",
+    });
+  }, [profileForm, user]);
 
   const passwordForm = useForm<PasswordFormValues>({
     resolver: zodResolver(passwordFormSchema) as Resolver<PasswordFormValues>,
@@ -64,7 +77,10 @@ export default function ProfilePage() {
   const onProfileSubmit = async (values: ProfileFormValues) => {
     setIsProfileSaving(true);
     try {
-      await authApi.updateProfile({ displayName: values.displayName });
+      await authApi.updateProfile({
+        displayName: values.displayName,
+        department: values.department,
+      });
       await refreshUser?.();
       toast.success("Profile updated.");
     } catch {
@@ -93,6 +109,24 @@ export default function ProfilePage() {
     }
   };
 
+  const deleteAccount = async () => {
+    if (!window.confirm("Delete your account permanently? This cannot be undone.")) return;
+    setIsDeleting(true);
+    try {
+      await authApi.deleteAccount();
+      await logout();
+      toast.success("Account deleted.");
+      router.replace("/register");
+    } catch (err: unknown) {
+      const msg =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+        "Account could not be deleted.";
+      toast.error(msg);
+    } finally {
+      setIsDeleting(false);
+    }
+  };
+
   return (
     <div className="max-w-xl space-y-6">
       <div>
@@ -111,8 +145,16 @@ export default function ProfilePage() {
             {user?.email}
           </p>
           <p>
+            <span className="text-muted-foreground">Student/Staff ID: </span>
+            {user?.studentStaffId ?? "Not assigned"}
+          </p>
+          <p>
+            <span className="text-muted-foreground">Department: </span>
+            {user?.department ?? "Not assigned"}
+          </p>
+          <p>
             <span className="text-muted-foreground">Role: </span>
-            <span className="capitalize">{user?.role}</span>
+            <span className="capitalize">{user?.role?.replace("_", " ")}</span>
           </p>
         </CardContent>
       </Card>
@@ -124,7 +166,7 @@ export default function ProfilePage() {
         </CardHeader>
         <CardContent>
           <Form {...profileForm}>
-            <form onSubmit={profileForm.handleSubmit(onProfileSubmit)} className="space-y-4">
+            <form method="post" onSubmit={profileForm.handleSubmit(onProfileSubmit)} className="space-y-4">
               <FormField
                 control={profileForm.control}
                 name="displayName"
@@ -138,8 +180,21 @@ export default function ProfilePage() {
                   </FormItem>
                 )}
               />
+              <FormField
+                control={profileForm.control}
+                name="department"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Department</FormLabel>
+                    <FormControl>
+                      <Input {...field} />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
               <Button type="submit" disabled={isProfileSaving}>
-                {isProfileSaving ? "Saving…" : "Save Name"}
+                {isProfileSaving ? "Saving…" : "Save Profile"}
               </Button>
             </form>
           </Form>
@@ -155,7 +210,7 @@ export default function ProfilePage() {
         </CardHeader>
         <CardContent>
           <Form {...passwordForm}>
-            <form onSubmit={passwordForm.handleSubmit(onPasswordSubmit)} className="space-y-4">
+            <form method="post" onSubmit={passwordForm.handleSubmit(onPasswordSubmit)} className="space-y-4">
               <FormField
                 control={passwordForm.control}
                 name="currentPassword"
@@ -163,7 +218,7 @@ export default function ProfilePage() {
                   <FormItem>
                     <FormLabel>Current Password</FormLabel>
                     <FormControl>
-                      <Input type="password" {...field} />
+                      <Input type="password" autoComplete="current-password" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -176,7 +231,7 @@ export default function ProfilePage() {
                   <FormItem>
                     <FormLabel>New Password</FormLabel>
                     <FormControl>
-                      <Input type="password" {...field} />
+                      <Input type="password" autoComplete="new-password" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -189,7 +244,7 @@ export default function ProfilePage() {
                   <FormItem>
                     <FormLabel>Confirm New Password</FormLabel>
                     <FormControl>
-                      <Input type="password" {...field} />
+                      <Input type="password" autoComplete="new-password" {...field} />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
@@ -200,6 +255,25 @@ export default function ProfilePage() {
               </Button>
             </form>
           </Form>
+        </CardContent>
+      </Card>
+
+      <Card className="border-red-200">
+        <CardHeader>
+          <CardTitle className="text-red-700">Danger Zone</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <p className="text-sm text-muted-foreground">
+            Account deletion is permanent. Accounts with active custody or handover records must be reassigned before deletion.
+          </p>
+          <Button
+            type="button"
+            variant="destructive"
+            onClick={deleteAccount}
+            disabled={isDeleting}
+          >
+            {isDeleting ? "Deleting…" : "Delete Account"}
+          </Button>
         </CardContent>
       </Card>
     </div>

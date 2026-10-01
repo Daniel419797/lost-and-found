@@ -6,15 +6,18 @@ export interface User {
   id: string;
   email: string;
   displayName: string;
+  studentStaffId?: string;
+  department?: string;
   role: UserRole;
   createdAt: string;
 }
 
 export interface RegisterRequestDTO {
   displayName: string;
+  studentStaffId: string;
+  department: string;
   email: string;
   password: string;
-  role?: UserRole;
 }
 
 export interface LoginRequestDTO {
@@ -32,6 +35,7 @@ export interface LoginResponseDTO {
 
 export interface UpdateProfileRequestDTO {
   displayName?: string;
+  department?: string;
   currentPassword?: string;
   newPassword?: string;
 }
@@ -147,25 +151,16 @@ export interface FoundReportQueryParams extends ListQueryParams {
   to?: string;
 }
 
-// ─── Logic Module ─────────────────────────────────────────────────────────────
-
-export interface ModuleRunResult {
-  runId: string;
-  status: string;
-  moduleKey: string;
-  versionNumber: number;
-}
-
 // ─── Claims ───────────────────────────────────────────────────────────────────
 
 export type ClaimStatus = "pending" | "under_review" | "approved" | "rejected" | "completed";
 
 export interface Claim {
   id: string;
-  lostReportId: string;
-  foundReportId?: string;
+  lostReportId?: string;
+  foundReportId: string;
   claimantId: string;
-  description?: string;
+  description: string;
   status: ClaimStatus;
   reviewNotes?: string;
   reviewedBy?: string;
@@ -177,7 +172,7 @@ export interface Claim {
 export interface CreateClaimDTO {
   lostReportId?: string;
   foundReportId: string;
-  description?: string;
+  description: string;
 }
 
 export interface ReviewClaimDTO {
@@ -185,15 +180,22 @@ export interface ReviewClaimDTO {
   reviewNotes?: string;
 }
 
-// ─── Match Candidates ─────────────────────────────────────────────────────────
+// ─── Match Candidates ────────────────────────────────────────────────────────
 
 export interface MatchCandidate {
   id: string;
   lostReportId: string;
   foundReportId: string;
   score: number;
-  factorsJson?: Record<string, unknown>;
   computedAt: string;
+  lostReport: Pick<
+    LostReport,
+    "id" | "itemTitle" | "category" | "color" | "brand" | "imageUrls" | "locationLost" | "dateLost" | "status"
+  >;
+  foundReport: Pick<
+    FoundReport,
+    "id" | "itemTitle" | "category" | "color" | "brand" | "imageUrls" | "locationFound" | "dateFound" | "custodyLocation" | "status"
+  >;
 }
 
 // ─── Handovers ────────────────────────────────────────────────────────────────
@@ -209,23 +211,5 @@ export interface Handover {
   completedByUserId?: string;
   evidenceUrl?: string;
   notes?: string;
-  createdAt: string;
-}
-
-// ─── Notifications ────────────────────────────────────────────────────────────
-
-export type NotificationType = "match_found" | "claim_submitted" | "claim_decided" | "handover_ready" | "system";
-export type NotificationChannel = "in_app" | "email";
-
-export interface Notification {
-  id: string;
-  userId: string;
-  type: NotificationType;
-  channel: NotificationChannel;
-  title: string;
-  body: string;
-  referenceId?: string;
-  referenceType?: string;
-  isRead: boolean;
   createdAt: string;
 }

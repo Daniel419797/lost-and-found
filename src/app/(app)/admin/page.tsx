@@ -3,13 +3,11 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import {
   Bell,
-  CalendarDays,
   CheckCircle2,
   Download,
   MoreVertical,
   PieChart,
   Search,
-  Settings,
   ShieldCheck,
   Timer,
   UserCircle,
@@ -18,17 +16,56 @@ import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useAuth } from "@/context/AuthContext";
-import { adminApi, type AdminMetrics } from "@/services/admin";
+import { adminApi, type AdminMetrics, type AdminUser, type AuditLogRow } from "@/services/admin";
 import { foundReportsApi } from "@/services/foundReports";
 import { lostReportsApi } from "@/services/lostReports";
 import { cn } from "@/lib/utils";
-import type { FoundReport, ItemCategory, LostReport } from "@/types";
+import type { FoundReport, ItemCategory, LostReport, UserRole } from "@/types";
 
 type WeekBucket = {
   label: string;
   reported: number;
   returned: number;
 };
+
+async function loadAllLostReports(): Promise<LostReport[]> {
+  const rows: LostReport[] = [];
+  let offset = 0;
+  const limit = 200;
+
+  while (true) {
+    const res = await lostReportsApi.list({ limit, offset });
+    rows.push(...res.data.data);
+    if (rows.length >= res.data.total || res.data.data.length === 0) return rows;
+    offset += res.data.data.length;
+  }
+}
+
+async function loadAllFoundReports(): Promise<FoundReport[]> {
+  const rows: FoundReport[] = [];
+  let offset = 0;
+  const limit = 200;
+
+  while (true) {
+    const res = await foundReportsApi.list({ limit, offset });
+    rows.push(...res.data.data);
+    if (rows.length >= res.data.total || res.data.data.length === 0) return rows;
+    offset += res.data.data.length;
+  }
+}
+
+async function loadAllAdminUsers(): Promise<AdminUser[]> {
+  const rows: AdminUser[] = [];
+  let offset = 0;
+  const limit = 200;
+
+  while (true) {
+    const res = await adminApi.getUsers({ limit, offset });
+    rows.push(...res.data.data.rows);
+    if (rows.length >= res.data.data.total || res.data.data.rows.length === 0) return rows;
+    offset += res.data.data.rows.length;
+  }
+}
 
 function percent(value: number, total: number) {
   if (total <= 0) return 0;
@@ -39,22 +76,17 @@ function categoryColor(index: number) {
   return ["#007a6c", "#9b421f", "#758281", "#606060", "#c8d3d2"][index % 5];
 }
 
-function hashPosition(seed: string, axis: "x" | "y") {
-  const text = `${seed}-${axis}`;
-  let hash = 0;
-  for (let i = 0; i < text.length; i += 1) {
-    hash = (hash * 31 + text.charCodeAt(i)) % 1000;
-  }
-  return 8 + (hash % 84);
-}
-
 function getReportLocation(report: LostReport | FoundReport) {
   return "locationLost" in report ? report.locationLost : report.locationFound;
 }
 
 function buildWeeklyBuckets(lostReports: LostReport[], foundReports: FoundReport[]): WeekBucket[] {
-  const buckets: WeekBucket[] = Array.from({ length: 5 }, (_, index) => ({
-    label: `Wk ${index + 1}`,
+  const dayMs = 86_400_000;
+  const now = Date.now();
+  const windowStart = now - 35 * dayMs;
+  const labels = ["4w ago", "3w ago", "2w ago", "Last week", "This week"];
+  const buckets: WeekBucket[] = labels.map((label) => ({
+    label,
     reported: 0,
     returned: 0,
   }));
@@ -72,15 +104,17 @@ function buildWeeklyBuckets(lostReports: LostReport[], foundReports: FoundReport
     })),
   ];
 
+  const bucketFor = (value: string): number | null => {
+    const time = new Date(value).getTime();
+    if (!Number.isFinite(time) || time < windowStart || time > now) return null;
+    return Math.min(4, Math.floor((time - windowStart) / (7 * dayMs)));
+  };
+
   for (const report of allReports) {
-    const created = new Date(report.createdAt);
-    if (!Number.isNaN(created.getTime())) {
-      buckets[Math.min(4, Math.max(0, Math.floor(created.getDate() / 7)))].reported += 1;
-    }
-    const updated = new Date(report.updatedAt);
-    if (report.returned && !Number.isNaN(updated.getTime())) {
-      buckets[Math.min(4, Math.max(0, Math.floor(updated.getDate() / 7)))].returned += 1;
-    }
+    const reportedBucket = bucketFor(report.createdAt);
+    if (reportedBucket !== null) buckets[reportedBucket].reported += 1;
+    const returnedBucket = report.returned ? bucketFor(report.updatedAt) : null;
+    if (returnedBucket !== null) buckets[returnedBucket].returned += 1;
   }
 
   return buckets;
@@ -92,29 +126,45 @@ export default function AdminPage() {
   const [metrics, setMetrics] = useState<AdminMetrics | null>(null);
   const [lostReports, setLostReports] = useState<LostReport[]>([]);
   const [foundReports, setFoundReports] = useState<FoundReport[]>([]);
+  const [auditLogs, setAuditLogs] = useState<AuditLogRow[]>([]);
+  const [adminUsers, setAdminUsers] = useState<AdminUser[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [roleUpdatingId, setRoleUpdatingId] = useState<string | null>(null);
   const [search, setSearch] = useState("");
 
   const load = useCallback(async () => {
     setIsLoading(true);
-    const [metricsResult, lostResult, foundResult] = await Promise.allSettled([
-      adminApi.getMetrics(),
-      lostReportsApi.list({ limit: 500 }),
-      foundReportsApi.list({ limit: 500 }),
-    ]);
+    const [metricsResult, lostResult, foundResult, auditResult, usersResult] =
+      await Promise.allSettled([
+        adminApi.getMetrics(),
+        loadAllLostReports(),
+        loadAllFoundReports(),
+        adminApi.getAuditLogs({ limit: 12, offset: 0 }),
+        loadAllAdminUsers(),
+      ]);
 
     if (metricsResult.status === "fulfilled") {
       setMetrics(metricsResult.value.data.data);
     }
     if (lostResult.status === "fulfilled") {
-      setLostReports(lostResult.value.data.data);
+      setLostReports(lostResult.value);
     }
     if (foundResult.status === "fulfilled") {
-      setFoundReports(foundResult.value.data.data);
+      setFoundReports(foundResult.value);
+    }
+    if (auditResult.status === "fulfilled") {
+      setAuditLogs(auditResult.value.data.data.rows ?? []);
+    }
+    if (usersResult.status === "fulfilled") {
+      setAdminUsers(usersResult.value);
     }
 
-    if ([metricsResult, lostResult, foundResult].some((result) => result.status === "rejected")) {
-      toast.error("Some analytics data could not be loaded.");
+    if (
+      [metricsResult, lostResult, foundResult, auditResult, usersResult].some(
+        (result) => result.status === "rejected",
+      )
+    ) {
+      toast.error("Some admin data could not be loaded.");
     }
     setIsLoading(false);
   }, []);
@@ -156,10 +206,58 @@ export default function AdminPage() {
 
   const weekBuckets = useMemo(() => buildWeeklyBuckets(lostReports, foundReports), [foundReports, lostReports]);
   const maxVolume = Math.max(1, ...weekBuckets.flatMap((bucket) => [bucket.reported, bucket.returned]));
-  const heatmapReports = useMemo(() => [...lostReports, ...foundReports].slice(0, 18), [foundReports, lostReports]);
+  const locationRows = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const report of [...lostReports, ...foundReports]) {
+      const location = getReportLocation(report).trim();
+      if (!location) continue;
+      counts.set(location, (counts.get(location) ?? 0) + 1);
+    }
+    return Array.from(counts.entries())
+      .sort((a, b) => b[1] - a[1])
+      .slice(0, 8)
+      .map(([location, count]) => ({ location, count }));
+  }, [foundReports, lostReports]);
+  const maxLocationCount = Math.max(1, ...locationRows.map((row) => row.count));
+  const filteredUsers = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    if (!term) return adminUsers;
+    return adminUsers.filter((entry) =>
+      [entry.displayName, entry.email, entry.role].join(" ").toLowerCase().includes(term),
+    );
+  }, [adminUsers, search]);
+
+  const updateRole = async (target: AdminUser, role: UserRole) => {
+    if (target.role === role) return;
+    setRoleUpdatingId(target.id);
+    try {
+      const res = await adminApi.updateUserRole(target.id, role);
+      setAdminUsers((rows) => rows.map((row) => (row.id === target.id ? res.data.data : row)));
+      toast.success(`${target.displayName}'s role updated to ${role.replace("_", " ")}.`);
+    } catch (err: unknown) {
+      const message =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+        "Failed to update user role.";
+      toast.error(message);
+    } finally {
+      setRoleUpdatingId(null);
+    }
+  };
+
+  const downloadCsv = (fileName: string, rows: Array<Array<string | number>>) => {
+    const csv = rows
+      .map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(","))
+      .join("\n");
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = fileName;
+    link.click();
+    URL.revokeObjectURL(url);
+  };
 
   const exportReport = () => {
-    const rows = [
+    downloadCsv("lost-found-analytics.csv", [
       ["Metric", "Value"],
       ["Total reported", analytics.totalReported],
       ["Items returned", analytics.returned],
@@ -169,14 +267,34 @@ export default function AdminPage() {
       ["Claims pending", metrics?.claims_pending ?? 0],
       ["Claims approved", metrics?.claims_approved ?? 0],
       ["Claims rejected", metrics?.claims_rejected ?? 0],
+    ]);
+  };
+
+  const exportRawData = () => {
+    const rows: Array<Array<string | number>> = [
+      ["Type", "ID", "Item", "Category", "Status", "Location", "Event date", "Created at"],
+      ...lostReports.map((report) => [
+        "lost",
+        report.id,
+        report.itemTitle,
+        report.category,
+        report.status,
+        report.locationLost,
+        report.dateLost,
+        report.createdAt ?? "",
+      ]),
+      ...foundReports.map((report) => [
+        "found",
+        report.id,
+        report.itemTitle,
+        report.category,
+        report.status,
+        report.locationFound,
+        report.dateFound,
+        report.createdAt ?? "",
+      ]),
     ];
-    const csv = rows.map((row) => row.map((cell) => `"${String(cell).replace(/"/g, '""')}"`).join(",")).join("\n");
-    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
-    const link = document.createElement("a");
-    link.href = url;
-    link.download = "lost-found-analytics.csv";
-    link.click();
-    URL.revokeObjectURL(url);
+    downloadCsv("lost-found-report-data.csv", rows);
   };
 
   if (!isAdmin) {
@@ -197,7 +315,7 @@ export default function AdminPage() {
             type="search"
             value={search}
             onChange={(event) => setSearch(event.target.value)}
-            placeholder="Search records..."
+            placeholder="Search users..."
             className="h-12 w-full rounded-full border border-[#b8c6c4] bg-white pl-12 pr-4 text-lg outline-none transition focus:border-[#007a6c] focus:ring-4 focus:ring-[#007a6c]/15"
           />
         </label>
@@ -217,10 +335,9 @@ export default function AdminPage() {
           </p>
         </div>
         <div className="flex flex-col gap-3 sm:flex-row">
-          <Button variant="outline" className="h-12 rounded-lg border-[#b8c6c4] bg-white px-5 text-base font-bold">
-            <CalendarDays className="mr-2 size-5" />
-            Last 30 Days
-          </Button>
+          <span className="inline-flex h-12 items-center rounded-lg border border-[#b8c6c4] bg-white px-5 text-base font-bold text-[#273235]">
+            All-time data
+          </span>
           <Button onClick={exportReport} className="h-12 rounded-lg bg-[#007a6c] px-5 text-base font-bold text-white hover:bg-[#006e62]">
             <Download className="mr-2 size-5" />
             Export Report
@@ -246,7 +363,7 @@ export default function AdminPage() {
 
           <div className="mt-8 grid gap-8 xl:grid-cols-[minmax(0,1fr)_385px]">
             <section className="rounded-xl border border-[#b8c6c4] bg-white p-8 shadow-sm">
-              <PanelHeader title="Reported vs. Returned Volume" />
+              <PanelHeader title="Last 5 Weeks — Reported vs. Returned" />
               <div className="mt-9 border-y border-[#dfe6e5] py-5">
                 <div className="flex h-[215px] items-end justify-around gap-7">
                   {weekBuckets.map((bucket) => (
@@ -300,62 +417,117 @@ export default function AdminPage() {
           </div>
 
           <div className="mt-8 grid gap-8 xl:grid-cols-[minmax(0,1fr)_385px]">
-            <section className="overflow-hidden rounded-xl border border-[#b8c6c4] bg-white shadow-sm">
-              <div className="flex flex-col gap-4 p-8 sm:flex-row sm:items-start sm:justify-between">
-                <div>
-                  <h2 className="font-heading text-[1.75rem] font-bold tracking-normal">Campus Activity Heatmap</h2>
-                  <p className="mt-2 text-lg text-[#273235]">
-                    Concentration of lost/found reports across primary buildings.
-                  </p>
-                </div>
-                <div className="flex rounded-lg bg-[#e7ebeb] p-1">
-                  <button className="rounded-md bg-white px-5 py-2 font-medium shadow-sm">Lost</button>
-                  <button className="rounded-md px-5 py-2 font-medium">Found</button>
-                </div>
-              </div>
-              <div className="relative h-[400px] bg-[linear-gradient(135deg,#ccd6d5_0_18%,#eef2f1_18%_26%,#b9c8c7_26%_39%,#e5ebea_39%_52%,#bfd0ce_52%_67%,#e8eeee_67%_100%)] opacity-90">
-                <div className="absolute inset-0 bg-[#dce7e6]/65" />
-                <div className="absolute inset-x-[35%] inset-y-0 bg-[#6bbcb6]/20 blur-3xl" />
-                {heatmapReports.map((report) => (
-                  <span
-                    key={report.id}
-                    className="absolute size-5 rounded-full border border-white/60 bg-[#8ce4dc]/70 shadow-[0_0_22px_8px_rgba(0,122,108,0.22)]"
-                    style={{
-                      left: `${hashPosition(report.id, "x")}%`,
-                      top: `${hashPosition(getReportLocation(report) || report.id, "y")}%`,
-                    }}
-                    title={report.itemTitle}
-                  />
-                ))}
-                <div className="absolute bottom-6 right-6 grid gap-3">
-                  <button className="flex size-10 items-center justify-center rounded bg-white text-2xl shadow">+</button>
-                  <button className="flex size-10 items-center justify-center rounded bg-white text-2xl shadow">-</button>
-                </div>
+            <section className="rounded-xl border border-[#b8c6c4] bg-white p-8 shadow-sm">
+              <h2 className="font-heading text-[1.75rem] font-bold tracking-normal">Top Reported Locations</h2>
+              <p className="mt-2 text-lg text-[#273235]">
+                Ranked from the actual location text on lost and found reports.
+              </p>
+              <div className="mt-7 space-y-5">
+                {locationRows.length === 0 ? (
+                  <p className="text-[#505a5c]">No report locations yet.</p>
+                ) : (
+                  locationRows.map((row) => (
+                    <div key={row.location}>
+                      <div className="mb-2 flex items-center justify-between gap-4">
+                        <span className="truncate font-bold text-[#101417]">{row.location}</span>
+                        <span className="shrink-0 text-sm text-[#505a5c]">{row.count} reports</span>
+                      </div>
+                      <div className="h-2 overflow-hidden rounded-full bg-[#e4e7e7]">
+                        <div
+                          className="h-full rounded-full bg-[#007a6c]"
+                          style={{ width: `${Math.max(8, (row.count / maxLocationCount) * 100)}%` }}
+                        />
+                      </div>
+                    </div>
+                  ))
+                )}
               </div>
             </section>
 
             <section className="rounded-xl border border-[#b8c6c4] bg-white p-8 shadow-sm">
-              <h2 className="font-heading text-[1.75rem] font-bold tracking-normal">Scheduled Reports</h2>
+              <h2 className="font-heading text-[1.75rem] font-bold tracking-normal">Report Exports</h2>
               <div className="mt-6 space-y-5">
                 <ReportExportCard
-                  title="Weekly Executive Summary"
-                  description="Contains current recovery rates, volume changes, and claim decisions."
-                  tag="PDF"
-                  cadence="Generated every Monday"
-                  onDownload={exportReport}
-                />
-                <ReportExportCard
-                  title="Raw Data Export (CSV)"
-                  description="Exports loaded item, status, category, and claim metric data."
+                  title="Analytics Summary"
+                  description="Exports the current recovery, claim, and handover metrics shown on this page."
                   tag="CSV"
                   cadence="On Demand"
                   onDownload={exportReport}
                 />
+                <ReportExportCard
+                  title="Raw Report Data"
+                  description="Exports the loaded lost and found records with status, category, location, and dates."
+                  tag="CSV"
+                  cadence="On Demand"
+                  onDownload={exportRawData}
+                />
               </div>
-              <Button variant="outline" className="mt-6 h-12 w-full rounded-lg border-[#b8c6c4] bg-white text-lg font-bold">
-                <Settings className="mr-2 size-5" />
-                Manage Exports
-              </Button>
+
+            </section>
+          </div>
+
+          <div className="mt-8 grid gap-8 xl:grid-cols-2">
+            <section className="rounded-xl border border-[#b8c6c4] bg-white p-8 shadow-sm">
+              <h2 className="font-heading text-[1.75rem] font-bold tracking-normal">Recent Audit Activity</h2>
+              <p className="mt-2 text-base text-[#505a5c]">Latest security and workflow events recorded by the backend.</p>
+              <div className="mt-6 space-y-3">
+                {auditLogs.length === 0 ? (
+                  <p className="text-[#505a5c]">No audit events yet.</p>
+                ) : (
+                  auditLogs.map((entry) => (
+                    <div key={entry.id} className="rounded-lg border border-[#e0e5e4] p-4">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="font-mono text-sm font-bold text-[#006d62]">{entry.action}</span>
+                        <span className="text-sm text-[#505a5c]">{new Date(entry.createdAt).toLocaleString()}</span>
+                      </div>
+                      <p className="mt-2 text-sm text-[#273235]">
+                        {entry.resource ?? "system"}{entry.resourceId ? ` · ${entry.resourceId}` : ""}
+                      </p>
+                    </div>
+                  ))
+                )}
+              </div>
+            </section>
+
+            <section className="rounded-xl border border-[#b8c6c4] bg-white p-8 shadow-sm">
+              <h2 className="font-heading text-[1.75rem] font-bold tracking-normal">User Directory</h2>
+              <p className="mt-2 text-base text-[#505a5c]">
+                {user?.role === "super_admin"
+                  ? "Review accounts and assign operational roles."
+                  : "Review registered accounts. Role changes require a super admin."}
+              </p>
+              <div className="mt-6 space-y-3">
+                {filteredUsers.length === 0 ? (
+                  <p className="text-[#505a5c]">No users match the current search.</p>
+                ) : (
+                  filteredUsers.slice(0, 30).map((entry) => (
+                    <div key={entry.id} className="grid gap-3 rounded-lg border border-[#e0e5e4] p-4 sm:grid-cols-[minmax(0,1fr)_180px] sm:items-center">
+                      <div className="min-w-0">
+                        <p className="truncate font-bold text-[#101417]">{entry.displayName}</p>
+                        <p className="truncate text-sm text-[#505a5c]">{entry.email}</p>
+                        <p className="mt-1 truncate text-xs text-[#697477]">
+                          {entry.studentStaffId ?? "No ID"}{entry.department ? ` · ${entry.department}` : ""}
+                        </p>
+                      </div>
+                      {user?.role === "super_admin" ? (
+                        <select
+                          value={entry.role}
+                          onChange={(event) => void updateRole(entry, event.target.value as UserRole)}
+                          disabled={roleUpdatingId === entry.id || entry.id === user.id}
+                          className="h-10 rounded-md border border-[#b8c6c4] bg-white px-3 text-sm font-bold capitalize"
+                        >
+                          <option value="student">Student</option>
+                          <option value="staff">Staff</option>
+                          <option value="admin">Admin</option>
+                          <option value="super_admin">Super admin</option>
+                        </select>
+                      ) : (
+                        <span className="text-sm font-bold capitalize text-[#273235]">{entry.role.replace("_", " ")}</span>
+                      )}
+                    </div>
+                  ))
+                )}
+              </div>
             </section>
           </div>
         </>

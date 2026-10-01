@@ -13,7 +13,6 @@ function pairHash(lostReportId: string, foundReportId: string): string {
 
 async function saveCandidate(lost: LostMatchInput, found: FoundMatchInput): Promise<void> {
   const { score, factors } = scoreMatch(lost, found);
-  if (score < 30) return;
 
   const existing = await prisma.matchCandidate.findUnique({
     where: {
@@ -24,6 +23,20 @@ async function saveCandidate(lost: LostMatchInput, found: FoundMatchInput): Prom
     },
     select: { notifiedAt: true },
   });
+
+  if (score < 30) {
+    if (existing) {
+      await prisma.matchCandidate.delete({
+        where: {
+          lostReportId_foundReportId: {
+            lostReportId: lost.id,
+            foundReportId: found.id,
+          },
+        },
+      });
+    }
+    return;
+  }
 
   await prisma.matchCandidate.upsert({
     where: {
@@ -79,14 +92,20 @@ export async function recomputeMatchesForLost(lostReportId: string): Promise<voi
   const lost = await prisma.lostReport.findUnique({ where: { id: lostReportId } });
   if (!lost || lost.status !== "open") return;
 
-  const foundReports = await prisma.foundReport.findMany({
-    where: { status: { in: ["open", "verified"] } },
-    orderBy: { createdAt: "desc" },
-    take: 500,
-  });
+  let cursor: string | undefined;
+  while (true) {
+    const foundReports = await prisma.foundReport.findMany({
+      where: { status: { in: ["open", "verified"] } },
+      orderBy: { id: "asc" },
+      take: 200,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+    });
+    if (foundReports.length === 0) break;
 
-  for (const found of foundReports) {
-    await saveCandidate(lost, found);
+    for (const found of foundReports) {
+      await saveCandidate(lost, found);
+    }
+    cursor = foundReports.at(-1)!.id;
   }
 }
 
@@ -94,13 +113,19 @@ export async function recomputeMatchesForFound(foundReportId: string): Promise<v
   const found = await prisma.foundReport.findUnique({ where: { id: foundReportId } });
   if (!found || !["open", "verified"].includes(found.status)) return;
 
-  const lostReports = await prisma.lostReport.findMany({
-    where: { status: "open" },
-    orderBy: { createdAt: "desc" },
-    take: 500,
-  });
+  let cursor: string | undefined;
+  while (true) {
+    const lostReports = await prisma.lostReport.findMany({
+      where: { status: "open" },
+      orderBy: { id: "asc" },
+      take: 200,
+      ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
+    });
+    if (lostReports.length === 0) break;
 
-  for (const lost of lostReports) {
-    await saveCandidate(lost, found);
+    for (const lost of lostReports) {
+      await saveCandidate(lost, found);
+    }
+    cursor = lostReports.at(-1)!.id;
   }
 }

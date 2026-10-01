@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useParams } from "next/navigation";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { format } from "date-fns";
 import {
   Bell,
@@ -12,12 +12,12 @@ import {
   Download,
   Mail,
   MapPin,
-  Search,
   UserCircle,
 } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
+import { useAuth } from "@/context/AuthContext";
 import { claimsApi } from "@/services/claims";
 import { foundReportsApi } from "@/services/foundReports";
 import { handoversApi } from "@/services/handovers";
@@ -57,11 +57,15 @@ function deriveFallbackPickupTime(claim?: Claim) {
 export default function ClaimPickupDetailsPage() {
   const params = useParams<{ id: string }>();
   const claimId = params.id;
+  const { user } = useAuth();
+  const isReviewer =
+    user?.role === "staff" || user?.role === "admin" || user?.role === "super_admin";
   const [claim, setClaim] = useState<Claim | null>(null);
   const [foundReport, setFoundReport] = useState<FoundReport | null>(null);
   const [lostReport, setLostReport] = useState<LostReport | null>(null);
   const [handover, setHandover] = useState<Handover | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [isCompleting, setIsCompleting] = useState(false);
 
   useEffect(() => {
     let isMounted = true;
@@ -117,20 +121,13 @@ export default function ClaimPickupDetailsPage() {
     "Campus Security Office";
   const officer = handover?.officerUserId ?? claim?.reviewedBy ?? "Recovery staff";
 
-  const qrCells = useMemo(() => {
-    const source = (claimId || "claim").padEnd(49, "0");
-    return Array.from({ length: 49 }, (_, index) => {
-      const code = source.charCodeAt(index % source.length);
-      return (code + index) % 3 !== 0;
-    });
-  }, [claimId]);
-
   const saveVerificationPass = () => {
     const text = [
       `Claim Reference: ${formatClaimReference(claimId)}`,
       `Item: ${itemTitle}`,
       `Pickup: ${pickupPoint}`,
       `Time: ${formatPickupDate(pickupTime)}`,
+      `Status: ${claim?.status ?? "unknown"}`,
     ].join("\n");
     const url = URL.createObjectURL(new Blob([text], { type: "text/plain;charset=utf-8" }));
     const link = document.createElement("a");
@@ -138,6 +135,26 @@ export default function ClaimPickupDetailsPage() {
     link.download = `${formatClaimReference(claimId)}-pickup-pass.txt`;
     link.click();
     URL.revokeObjectURL(url);
+  };
+
+  const completeHandover = async () => {
+    if (!handover || handover.status === "completed") return;
+    setIsCompleting(true);
+    try {
+      const res = await handoversApi.complete(handover.id, {
+        notes: "Handover confirmed from the staff claim view.",
+      });
+      setHandover(res.data.data);
+      setClaim((current) => (current ? { ...current, status: "completed" } : current));
+      toast.success("Handover marked as completed.");
+    } catch (err: unknown) {
+      const message =
+        (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+        "Failed to complete handover.";
+      toast.error(message);
+    } finally {
+      setIsCompleting(false);
+    }
   };
 
   if (isLoading) {
@@ -165,19 +182,9 @@ export default function ClaimPickupDetailsPage() {
 
   return (
     <div className="mx-auto max-w-[1220px]">
-      <div className="flex min-h-[50px] flex-col gap-4 border-b border-[#c9d4d2] pb-5 xl:flex-row xl:items-center xl:justify-between">
-        <label className="relative block w-full max-w-[560px]">
-          <Search className="pointer-events-none absolute left-4 top-1/2 size-5 -translate-y-1/2 text-[#263234]" />
-          <input
-            type="search"
-            placeholder="Search items, locations..."
-            className="h-12 w-full rounded-full border border-[#b8c6c4] bg-white pl-12 pr-4 text-lg outline-none transition focus:border-[#007a6c] focus:ring-4 focus:ring-[#007a6c]/15"
-          />
-        </label>
-        <div className="flex items-center gap-7 text-[#006056]">
-          <Bell className="size-5" />
-          <UserCircle className="size-7" />
-        </div>
+      <div className="flex min-h-[50px] items-center justify-end gap-7 border-b border-[#c9d4d2] pb-5 text-[#006056]">
+        <Bell className="size-5" />
+        <UserCircle className="size-7" />
       </div>
 
       <div className="mt-9 flex flex-wrap items-center gap-3 text-lg text-[#263234]">
@@ -209,22 +216,20 @@ export default function ClaimPickupDetailsPage() {
       <div className="mt-9 grid gap-8 xl:grid-cols-[490px_minmax(0,1fr)]">
         <section className="rounded-xl border border-[#d5dddc] bg-white p-8 text-center shadow-sm shadow-[inset_0_4px_0_#007a6c]">
           <h2 className="font-heading text-[1.8rem] font-bold tracking-normal">Verification Pass</h2>
-          <div className="mx-auto mt-9 max-w-[285px] rounded-xl border border-[#b8c6c4] bg-[#f8fbfb] p-3">
-            <div className="relative border border-[#007a6c] bg-[#263234] p-8">
-              <div className="mx-auto grid size-36 grid-cols-7 gap-1 bg-white p-3">
-                {qrCells.map((active, index) => (
-                  <span key={index} className={active ? "bg-[#263234]" : "bg-white"} />
-                ))}
-              </div>
-              <span className="absolute -left-1 -top-1 size-6 border-l-2 border-t-2 border-[#007a6c]" />
-              <span className="absolute -right-1 -top-1 size-6 border-r-2 border-t-2 border-[#007a6c]" />
-              <span className="absolute -bottom-1 -left-1 size-6 border-b-2 border-l-2 border-[#007a6c]" />
-              <span className="absolute -bottom-1 -right-1 size-6 border-b-2 border-r-2 border-[#007a6c]" />
-            </div>
+          <div className="mx-auto mt-9 max-w-[360px] rounded-xl border border-[#b8c6c4] bg-[#f8fbfb] p-7 text-left">
+            <p className="text-sm font-bold uppercase tracking-[0.16em] text-[#505a5c]">
+              Claim reference
+            </p>
+            <p className="mt-3 break-all font-mono text-2xl font-bold text-[#101417]">
+              {formatClaimReference(claim.id)}
+            </p>
+            <p className="mt-5 text-base leading-7 text-[#273235]">
+              Staff verifies this reference against the authenticated claim and handover record.
+            </p>
           </div>
-          <p className="mt-9 text-xl text-[#101417]">Present this code to staff upon arrival.</p>
+          <p className="mt-9 text-xl text-[#101417]">Bring a valid campus ID for collection.</p>
           <p className="mx-auto mt-4 max-w-[360px] text-base leading-7 text-[#273235]">
-            Ensure your brightness is turned up for faster scanning. Valid ID may be required.
+            This pass contains the live claim reference and pickup details; it is not a standalone authorization token.
           </p>
           <Button
             type="button"
@@ -282,9 +287,22 @@ export default function ClaimPickupDetailsPage() {
                   </p>
                   <p className="mt-3 text-[1.65rem] font-bold leading-tight">{formatPickupWindow(pickupTime)}</p>
                 </div>
-                <Button variant="outline" className="mt-5 h-12 w-full rounded-lg border-[#b8c6c4] bg-white text-base font-bold text-[#006d62]">
-                  Reschedule Pickup
-                </Button>
+                {isReviewer && handover && handover.status !== "completed" && claim.status === "approved" ? (
+                  <Button
+                    type="button"
+                    onClick={completeHandover}
+                    disabled={isCompleting}
+                    className="mt-5 h-12 w-full rounded-lg bg-[#007a6c] text-base font-bold text-white hover:bg-[#006e62]"
+                  >
+                    {isCompleting ? "Completing..." : "Mark Handover Complete"}
+                  </Button>
+                ) : (
+                  <p className="mt-5 text-sm leading-6 text-[#505a5c]">
+                    {handover?.status === "completed"
+                      ? `Completed ${handover.completedAt ? formatPickupDate(handover.completedAt) : ""}`
+                      : "Pickup scheduling is managed by recovery staff."}
+                  </p>
+                )}
               </section>
 
               <section className="rounded-xl border border-[#d5dddc] bg-white p-8 shadow-sm">

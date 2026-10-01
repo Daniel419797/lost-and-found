@@ -98,21 +98,22 @@ export default function LoginPage() {
             )}
 
             <Form {...form}>
-              <form onSubmit={form.handleSubmit(onSubmit)} className="mt-7 space-y-5">
+              <form method="post" onSubmit={form.handleSubmit(onSubmit)} className="mt-7 space-y-5">
                 <FormField
                   control={form.control}
                   name="email"
                   render={({ field }) => (
                     <FormItem>
                       <FormLabel className="text-sm font-bold text-[#101417]">
-                        University Email
+                        Email
                       </FormLabel>
                       <FormControl>
                         <div className="relative">
                           <Mail className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[#6d7476]" />
                           <Input
                             type="email"
-                            placeholder="netid@university.edu"
+                            autoComplete="username"
+                            placeholder="name@example.edu"
                             className="h-11 rounded-md border-[#afbfbd] bg-white pl-10 text-sm tracking-normal text-[#101417] placeholder:text-[#b4b9ba] focus-visible:border-[#007a6c] focus-visible:ring-[#007a6c]/20"
                             {...field}
                           />
@@ -128,22 +129,15 @@ export default function LoginPage() {
                   name="password"
                   render={({ field }) => (
                     <FormItem>
-                      <div className="flex items-center justify-between gap-4">
-                        <FormLabel className="text-sm font-bold text-[#101417]">
-                          Password
-                        </FormLabel>
-                        <Link
-                          href="/login"
-                          className="text-sm font-semibold text-[#006d62] hover:text-[#00584f]"
-                        >
-                          Forgot Password?
-                        </Link>
-                      </div>
+                      <FormLabel className="text-sm font-bold text-[#101417]">
+                        Password
+                      </FormLabel>
                       <FormControl>
                         <div className="relative">
                           <LockKeyhole className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-[#6d7476]" />
                           <Input
                             type="password"
+                            autoComplete="current-password"
                             placeholder="********"
                             className="h-11 rounded-md border-[#afbfbd] bg-white pl-10 text-sm tracking-[0.14em] text-[#101417] placeholder:text-[#aaa] focus-visible:border-[#007a6c] focus-visible:ring-[#007a6c]/20"
                             {...field}

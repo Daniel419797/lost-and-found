@@ -22,4 +22,7 @@ export const handoversApi = {
       data: asListResponse(res.data.data.rows ?? [], res.data.data.total ?? 0, limit, offset),
     };
   },
+
+  complete: (id: string, data?: { notes?: string; evidenceUrl?: string }) =>
+    api.patch<{ data: Handover }>(`/handovers/${id}/complete`, data ?? {}),
 };

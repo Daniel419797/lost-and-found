@@ -135,6 +135,8 @@ adminRouter.get("/users", async (req, res) => {
           OR: [
             { email: { contains: query.search, mode: "insensitive" } },
             { displayName: { contains: query.search, mode: "insensitive" } },
+            { studentStaffId: { contains: query.search, mode: "insensitive" } },
+            { department: { contains: query.search, mode: "insensitive" } },
           ],
         }
       : {}),
@@ -146,7 +148,15 @@ adminRouter.get("/users", async (req, res) => {
       orderBy: { createdAt: "desc" },
       skip: query.offset,
       take: query.limit,
-      select: { id: true, email: true, displayName: true, role: true, createdAt: true },
+      select: {
+        id: true,
+        email: true,
+        displayName: true,
+        studentStaffId: true,
+        department: true,
+        role: true,
+        createdAt: true,
+      },
     }),
     prisma.user.count({ where }),
   ]);
@@ -170,10 +180,31 @@ adminRouter.patch(
       throw new AppError(409, "You cannot demote your own super admin account.");
     }
 
+    const target = await prisma.user.findUnique({
+      where: { id },
+      select: { role: true },
+    });
+    if (!target) throw new AppError(404, "User not found.");
+
+    if (target.role === "super_admin" && input.role !== "super_admin") {
+      const superAdminCount = await prisma.user.count({ where: { role: "super_admin" } });
+      if (superAdminCount <= 1) {
+        throw new AppError(409, "At least one super admin account must remain.");
+      }
+    }
+
     const user = await prisma.user.update({
       where: { id },
       data: { role: input.role },
-      select: { id: true, email: true, displayName: true, role: true, createdAt: true },
+      select: {
+        id: true,
+        email: true,
+        displayName: true,
+        studentStaffId: true,
+        department: true,
+        role: true,
+        createdAt: true,
+      },
     });
 
     void writeAudit(req, "user.role_changed", "user", id, { role: input.role });

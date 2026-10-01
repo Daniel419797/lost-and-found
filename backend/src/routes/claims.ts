@@ -45,7 +45,7 @@ function claimView(row: {
 }) {
   return {
     id: row.id,
-    lostReportId: row.linkedLostReportId ?? "",
+    lostReportId: row.linkedLostReportId ?? undefined,
     foundReportId: row.foundReportId,
     claimantId: row.claimantUserId,
     status: row.status,

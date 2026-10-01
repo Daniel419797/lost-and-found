@@ -11,6 +11,7 @@ import { adminRouter } from "./routes/admin.js";
 import { authRouter } from "./routes/auth.js";
 import { claimsRouter, handoversRouter } from "./routes/claims.js";
 import { notificationsRouter } from "./routes/notifications.js";
+import { matchesRouter } from "./routes/matches.js";
 import { foundReportsRouter, lostReportsRouter } from "./routes/reports.js";
 import { uploadsRouter } from "./routes/uploads.js";
 
@@ -56,6 +57,7 @@ app.use("/api/v1/found-reports", foundReportsRouter);
 app.use("/api/v1/claims", claimsRouter);
 app.use("/api/v1/handovers", handoversRouter);
 app.use("/api/v1/notifications", notificationsRouter);
+app.use("/api/v1/matches", matchesRouter);
 app.use("/api/v1/uploads", uploadsRouter);
 app.use("/api/v1/admin", adminRouter);
 
