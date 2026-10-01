@@ -71,6 +71,20 @@ npm run prisma:deploy
 npm run dev
 ```
 
+## Production deployment
+
+The repository includes `render.yaml` for the dedicated backend. The Blueprint adopts the existing Render Postgres instance named `lost-and-found-db`, wires both Prisma database URLs from that database, generates `JWT_SECRET`, applies migrations during the build, and runs the API health check at `/ready`.
+
+The S3-compatible image-storage credentials are intentionally marked `sync: false`; provide those secret values in Render when the Blueprint is first applied.
+
+After the backend is live, set Vercel's `NEXT_PUBLIC_API_URL` to:
+
+```text
+https://<lost-and-found-backend-host>/api/v1
+```
+
+Then redeploy the production frontend. Do not leave the frontend pointed at the legacy Nexus/Reuse project gateway.
+
 ## Quality gates
 
 Frontend:
