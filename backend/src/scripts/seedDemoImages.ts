@@ -22,7 +22,7 @@ type ImageSpec = {
 
 function unsplash(path: string): string {
   const separator = path.includes("?") ? "&" : "?";
-  return `https://images.unsplash.com/${path}${separator}auto=format&fit=crop&fm=jpg&q=78&w=900`;
+  return `https://images.unsplash.com/${path}${separator}fit=crop&fm=jpg&q=78&w=900`;
 }
 
 const sources = {
@@ -79,7 +79,7 @@ async function fetchImage(url: string): Promise<{ contentType: string; data: Uin
       signal: controller.signal,
       headers: {
         "User-Agent": "CampusLostFoundDemoSeeder/1.0",
-        Accept: "image/avif,image/webp,image/jpeg,image/png,*/*",
+        Accept: "image/jpeg,image/png,image/webp,*/*;q=0.8",
       },
     });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
