@@ -28,6 +28,7 @@ model User {
   completedHandovers Handover[]       @relation("HandoverCompleter")
   notifications      Notification[]   @relation("NotificationRecipient")
   auditLogs          AuditLog[]       @relation("AuditActor")
+  mediaObjects       MediaObject[]
 
   @@map("users")
 }
@@ -189,4 +190,17 @@ model AuditLog {
   @@index([action, createdAt])
   @@index([userId, createdAt])
   @@map("audit_logs")
+}
+
+model MediaObject {
+  id          String   @id @default(uuid()) @db.Uuid
+  ownerUserId String   @map("owner_user_id") @db.Uuid
+  contentType String   @map("content_type") @db.VarChar(64)
+  size        Int
+  data        Bytes
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz(3)
+  owner       User     @relation(fields: [ownerUserId], references: [id], onDelete: Cascade)
+
+  @@index([ownerUserId, createdAt])
+  @@map("media_objects")
 }

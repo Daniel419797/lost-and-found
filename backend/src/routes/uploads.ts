@@ -3,11 +3,12 @@ import { PutObjectCommand, S3Client } from "@aws-sdk/client-s3";
 import { Router } from "express";
 import multer from "multer";
 import { env, storageConfigured } from "../config.js";
+import { prisma } from "../lib/prisma.js";
 import { authenticatedUserId, requireAuth } from "../middleware/auth.js";
 import { AppError } from "../middleware/errors.js";
+import { uuidSchema } from "../validation.js";
 
 export const uploadsRouter = Router();
-uploadsRouter.use(requireAuth);
 
 const accepted = new Set(["image/jpeg", "image/png", "image/webp"]);
 const extensionByType: Record<string, string> = {
@@ -61,9 +62,28 @@ function storageClient(): S3Client {
   });
 }
 
+uploadsRouter.get("/media/:id", async (req, res) => {
+  const id = uuidSchema.parse(req.params.id);
+  const media = await prisma.mediaObject.findUnique({
+    where: { id },
+    select: { data: true, contentType: true, size: true },
+  });
+
+  if (!media) throw new AppError(404, "Image not found.");
+
+  res.set({
+    "Content-Type": media.contentType,
+    "Content-Length": String(media.size),
+    "Cache-Control": "public, max-age=31536000, immutable",
+    "X-Content-Type-Options": "nosniff",
+  });
+  res.send(Buffer.from(media.data));
+});
+
+uploadsRouter.use(requireAuth);
+
 uploadsRouter.post("/item-photo", upload.single("file"), async (req, res) => {
   if (!req.file) throw new AppError(400, "Image file is required.");
-  if (!storageConfigured) throw new AppError(503, "Image storage is not configured.");
 
   const detectedContentType = detectImageMime(req.file.buffer);
   if (!detectedContentType || detectedContentType !== req.file.mimetype) {
@@ -72,23 +92,47 @@ uploadsRouter.post("/item-photo", upload.single("file"), async (req, res) => {
 
   const userId = authenticatedUserId(req);
   const extension = extensionByType[detectedContentType];
-  const key = `lost-and-found/${userId}/${new Date().toISOString().slice(0, 10)}/${randomUUID()}.${extension}`;
 
-  await storageClient().send(
-    new PutObjectCommand({
-      Bucket: env.STORAGE_BUCKET!,
-      Key: key,
-      Body: req.file.buffer,
-      ContentType: detectedContentType,
-      CacheControl: "public, max-age=31536000, immutable",
-    }),
-  );
+  if (storageConfigured) {
+    const key = `lost-and-found/${userId}/${new Date().toISOString().slice(0, 10)}/${randomUUID()}.${extension}`;
 
-  const base = env.STORAGE_PUBLIC_BASE_URL!.replace(/\/+$/, "");
+    await storageClient().send(
+      new PutObjectCommand({
+        Bucket: env.STORAGE_BUCKET!,
+        Key: key,
+        Body: req.file.buffer,
+        ContentType: detectedContentType,
+        CacheControl: "public, max-age=31536000, immutable",
+      }),
+    );
+
+    const base = env.STORAGE_PUBLIC_BASE_URL!.replace(/\/+$/, "");
+    res.status(201).json({
+      data: {
+        url: `${base}/${key}`,
+        fileName: key,
+        contentType: detectedContentType,
+        size: req.file.size,
+      },
+    });
+    return;
+  }
+
+  const media = await prisma.mediaObject.create({
+    data: {
+      ownerUserId: userId,
+      contentType: detectedContentType,
+      size: req.file.size,
+      data: Uint8Array.from(req.file.buffer),
+    },
+    select: { id: true },
+  });
+
+  const publicBase = `${req.protocol}://${req.get("host")}`.replace(/\/+$/, "");
   res.status(201).json({
     data: {
-      url: `${base}/${key}`,
-      fileName: key,
+      url: `${publicBase}/api/v1/uploads/media/${media.id}`,
+      fileName: `database/${media.id}.${extension}`,
       contentType: detectedContentType,
       size: req.file.size,
     },
