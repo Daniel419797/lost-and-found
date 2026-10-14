@@ -31,4 +31,10 @@ export const lostStatusSchema = z.enum(["open", "matched", "recovered", "closed_
 export const foundStatusSchema = z.enum(["open", "claimed", "verified", "closed"]);
 export const claimStatusSchema = z.enum(["pending", "under_review", "approved", "rejected", "completed"]);
 
-export const uuidSchema = z.string().uuid();
+// PostgreSQL's uuid type accepts the canonical 8-4-4-4-12 hexadecimal form
+// regardless of RFC version bits. Some deterministic presentation seed IDs are
+// intentionally version-agnostic, so validate the database-compatible shape here.
+export const uuidSchema = z
+  .string()
+  .trim()
+  .regex(/^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$/, "Invalid UUID");
