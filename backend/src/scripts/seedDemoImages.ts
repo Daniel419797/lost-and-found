@@ -7,7 +7,7 @@ const MEDIA_PUBLIC_BASE = (
 ).replace(/\/+$/, "");
 
 const MAX_IMAGE_BYTES = 3 * 1024 * 1024;
-const DOWNLOAD_TIMEOUT_MS = 20_000;
+const DOWNLOAD_TIMEOUT_MS = 25_000;
 
 function id(key: string): string {
   const hex = createHash("sha256").update(`lost-found-demo:${key}`).digest("hex").slice(0, 32);
@@ -17,52 +17,53 @@ function id(key: string): string {
 type ImageSpec = {
   kind: "lost" | "found";
   key: string;
-  keywords: string;
-  lock: number;
+  source: string;
 };
 
+function unsplash(path: string): string {
+  const separator = path.includes("?") ? "&" : "?";
+  return `https://images.unsplash.com/${path}${separator}auto=format&fit=crop&fm=jpg&q=78&w=900`;
+}
+
+const sources = {
+  laptop: unsplash("photo-1575320854760-bfffc3550640"),
+  phone: unsplash("photo-1657731739322-409509986567"),
+  idCard: unsplash("photo-1783120947325-56ae2d32b98e"),
+  backpack: unsplash("photo-1560892000-4a61808f1940"),
+  airpods: unsplash("photo-1783890848515-c0dc28b25ef2"),
+  calculator: unsplash("photo-1653074281018-c08f358059ab"),
+  wallet: unsplash("photo-1658255307973-1a3aab57a539"),
+  keys: unsplash("photo-1759428679273-11d914866394"),
+  textbook: unsplash("3/alejandroescamilla-book.jpg"),
+  hoodie: unsplash("photo-1499972777470-6a932ea55420"),
+  umbrella: unsplash("photo-1612170482263-b7e393c4e87f"),
+  flash: unsplash("photo-1785140629042-9591a9813246"),
+  watch: unsplash("photo-1622299355484-f81b9f4fa5e8"),
+  notebook: unsplash("photo-1523635050353-f5b60dafa07c"),
+} as const;
+
 const imageSpecs: ImageSpec[] = [
-  { kind: "lost", key: "laptop", keywords: "laptop,dell", lock: 101 },
-  { kind: "lost", key: "phone", keywords: "smartphone,samsung", lock: 102 },
-  { kind: "lost", key: "id-card", keywords: "identity-card,badge", lock: 103 },
-  { kind: "lost", key: "backpack", keywords: "backpack,bag", lock: 104 },
-  { kind: "lost", key: "airpods", keywords: "earbuds,airpods", lock: 105 },
-  { kind: "lost", key: "calculator", keywords: "calculator,casio", lock: 106 },
-  { kind: "lost", key: "wallet", keywords: "leather-wallet,wallet", lock: 107 },
-  { kind: "lost", key: "keys", keywords: "keys,keyring", lock: 108 },
-  { kind: "lost", key: "textbook", keywords: "textbook,mathematics", lock: 109 },
-  { kind: "lost", key: "hoodie", keywords: "black-hoodie,hoodie", lock: 110 },
-  { kind: "found", key: "laptop", keywords: "dell-laptop,laptop", lock: 201 },
-  { kind: "found", key: "phone", keywords: "samsung-phone,smartphone", lock: 202 },
-  { kind: "found", key: "id-card", keywords: "student-id-card,badge", lock: 203 },
-  { kind: "found", key: "backpack", keywords: "laptop-backpack,backpack", lock: 204 },
-  { kind: "found", key: "airpods", keywords: "wireless-earbuds,earbuds", lock: 205 },
-  { kind: "found", key: "wallet", keywords: "black-wallet,wallet", lock: 206 },
-  { kind: "found", key: "umbrella", keywords: "red-umbrella,umbrella", lock: 207 },
-  { kind: "found", key: "flash", keywords: "usb-drive,usb", lock: 208 },
-  { kind: "found", key: "watch", keywords: "digital-watch,wristwatch", lock: 209 },
-  { kind: "found", key: "notebook", keywords: "spiral-notebook,notebook", lock: 210 },
+  { kind: "lost", key: "laptop", source: sources.laptop },
+  { kind: "lost", key: "phone", source: sources.phone },
+  { kind: "lost", key: "id-card", source: sources.idCard },
+  { kind: "lost", key: "backpack", source: sources.backpack },
+  { kind: "lost", key: "airpods", source: sources.airpods },
+  { kind: "lost", key: "calculator", source: sources.calculator },
+  { kind: "lost", key: "wallet", source: sources.wallet },
+  { kind: "lost", key: "keys", source: sources.keys },
+  { kind: "lost", key: "textbook", source: sources.textbook },
+  { kind: "lost", key: "hoodie", source: sources.hoodie },
+  { kind: "found", key: "laptop", source: sources.laptop },
+  { kind: "found", key: "phone", source: sources.phone },
+  { kind: "found", key: "id-card", source: sources.idCard },
+  { kind: "found", key: "backpack", source: sources.backpack },
+  { kind: "found", key: "airpods", source: sources.airpods },
+  { kind: "found", key: "wallet", source: sources.wallet },
+  { kind: "found", key: "umbrella", source: sources.umbrella },
+  { kind: "found", key: "flash", source: sources.flash },
+  { kind: "found", key: "watch", source: sources.watch },
+  { kind: "found", key: "notebook", source: sources.notebook },
 ];
-
-function photoUrl(keywords: string, lock: number): string {
-  const encodedKeywords = keywords
-    .split(",")
-    .map((part) => encodeURIComponent(part))
-    .join(",");
-  return `https://loremflickr.com/640/480/${encodedKeywords}?lock=${lock}`;
-}
-
-function sourceUrls(spec: ImageSpec): string[] {
-  const parts = spec.keywords.split(",").map((part) => part.trim()).filter(Boolean);
-  const simpleKeyword = parts.at(-1) ?? spec.key;
-  const label = `${spec.kind} ${spec.key}`.replace(/-/g, " ");
-
-  return [
-    photoUrl(spec.keywords, spec.lock),
-    photoUrl(simpleKeyword, spec.lock + 1_000),
-    `https://placehold.co/640x480/png?text=${encodeURIComponent(label)}`,
-  ];
-}
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
@@ -76,7 +77,10 @@ async function fetchImage(url: string): Promise<{ contentType: string; data: Uin
     const response = await fetch(url, {
       redirect: "follow",
       signal: controller.signal,
-      headers: { "User-Agent": "CampusLostFoundDemoSeeder/1.0" },
+      headers: {
+        "User-Agent": "CampusLostFoundDemoSeeder/1.0",
+        Accept: "image/avif,image/webp,image/jpeg,image/png,*/*",
+      },
     });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
@@ -106,15 +110,13 @@ async function downloadImage(
 ): Promise<{ contentType: string; data: Uint8Array<ArrayBuffer>; source: string }> {
   let lastError: unknown;
 
-  for (const url of sourceUrls(spec)) {
-    for (let attempt = 1; attempt <= 2; attempt += 1) {
-      try {
-        const result = await fetchImage(url);
-        return { ...result, source: url };
-      } catch (error) {
-        lastError = error;
-        if (attempt < 2) await sleep(800);
-      }
+  for (let attempt = 1; attempt <= 3; attempt += 1) {
+    try {
+      const result = await fetchImage(spec.source);
+      return { ...result, source: spec.source };
+    } catch (error) {
+      lastError = error;
+      if (attempt < 3) await sleep(attempt * 1_000);
     }
   }
 
@@ -175,7 +177,7 @@ async function seedImage(spec: ImageSpec): Promise<void> {
 async function main(): Promise<void> {
   for (let index = 0; index < imageSpecs.length; index += 4) {
     await Promise.all(imageSpecs.slice(index, index + 4).map(seedImage));
-    if (index + 4 < imageSpecs.length) await sleep(500);
+    if (index + 4 < imageSpecs.length) await sleep(400);
   }
 
   const [lostWithImages, foundWithImages, mediaObjects] = await Promise.all([
