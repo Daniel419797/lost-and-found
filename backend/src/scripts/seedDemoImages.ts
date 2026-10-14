@@ -56,7 +56,9 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-async function downloadImage(spec: ImageSpec): Promise<{ contentType: string; data: Uint8Array }> {
+async function downloadImage(
+  spec: ImageSpec,
+): Promise<{ contentType: string; data: Uint8Array<ArrayBuffer> }> {
   const url = sourceUrl(spec);
   let lastError: unknown;
 
@@ -73,12 +75,15 @@ async function downloadImage(spec: ImageSpec): Promise<{ contentType: string; da
       if (!response.ok) throw new Error(`HTTP ${response.status}`);
 
       const rawType = response.headers.get("content-type") ?? "";
-      const contentType = rawType.split(";", 1)[0].trim().toLowerCase();
+      const contentType = rawType.split(";")[0]?.trim().toLowerCase() ?? "";
       if (!["image/jpeg", "image/png", "image/webp"].includes(contentType)) {
         throw new Error(`Unsupported content type: ${rawType || "missing"}`);
       }
 
-      const data = new Uint8Array(await response.arrayBuffer());
+      const downloaded = new Uint8Array(await response.arrayBuffer());
+      const data = new Uint8Array(downloaded.byteLength);
+      data.set(downloaded);
+
       if (data.byteLength === 0) throw new Error("Downloaded image is empty");
       if (data.byteLength > MAX_IMAGE_BYTES) {
         throw new Error(`Image is too large: ${data.byteLength} bytes`);
