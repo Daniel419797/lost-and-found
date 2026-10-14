@@ -44,62 +44,82 @@ const imageSpecs: ImageSpec[] = [
   { kind: "found", key: "notebook", keywords: "spiral-notebook,notebook", lock: 210 },
 ];
 
-function sourceUrl(spec: ImageSpec): string {
-  const keywords = spec.keywords
+function photoUrl(keywords: string, lock: number): string {
+  const encodedKeywords = keywords
     .split(",")
     .map((part) => encodeURIComponent(part))
     .join(",");
-  return `https://loremflickr.com/640/480/${keywords}?lock=${spec.lock}`;
+  return `https://loremflickr.com/640/480/${encodedKeywords}?lock=${lock}`;
+}
+
+function sourceUrls(spec: ImageSpec): string[] {
+  const parts = spec.keywords.split(",").map((part) => part.trim()).filter(Boolean);
+  const simpleKeyword = parts.at(-1) ?? spec.key;
+  const label = `${spec.kind} ${spec.key}`.replace(/-/g, " ");
+
+  return [
+    photoUrl(spec.keywords, spec.lock),
+    photoUrl(simpleKeyword, spec.lock + 1_000),
+    `https://placehold.co/640x480/png?text=${encodeURIComponent(label)}`,
+  ];
 }
 
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
+async function fetchImage(url: string): Promise<{ contentType: string; data: Uint8Array<ArrayBuffer> }> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), DOWNLOAD_TIMEOUT_MS);
+
+  try {
+    const response = await fetch(url, {
+      redirect: "follow",
+      signal: controller.signal,
+      headers: { "User-Agent": "CampusLostFoundDemoSeeder/1.0" },
+    });
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+
+    const rawType = response.headers.get("content-type") ?? "";
+    const contentType = rawType.split(";")[0]?.trim().toLowerCase() ?? "";
+    if (!["image/jpeg", "image/png", "image/webp"].includes(contentType)) {
+      throw new Error(`Unsupported content type: ${rawType || "missing"}`);
+    }
+
+    const downloaded = new Uint8Array(await response.arrayBuffer());
+    const data = new Uint8Array(downloaded.byteLength);
+    data.set(downloaded);
+
+    if (data.byteLength === 0) throw new Error("Downloaded image is empty");
+    if (data.byteLength > MAX_IMAGE_BYTES) {
+      throw new Error(`Image is too large: ${data.byteLength} bytes`);
+    }
+
+    return { contentType, data };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 async function downloadImage(
   spec: ImageSpec,
-): Promise<{ contentType: string; data: Uint8Array<ArrayBuffer> }> {
-  const url = sourceUrl(spec);
+): Promise<{ contentType: string; data: Uint8Array<ArrayBuffer>; source: string }> {
   let lastError: unknown;
 
-  for (let attempt = 1; attempt <= 3; attempt += 1) {
-    const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), DOWNLOAD_TIMEOUT_MS);
-
-    try {
-      const response = await fetch(url, {
-        redirect: "follow",
-        signal: controller.signal,
-        headers: { "User-Agent": "CampusLostFoundDemoSeeder/1.0" },
-      });
-      if (!response.ok) throw new Error(`HTTP ${response.status}`);
-
-      const rawType = response.headers.get("content-type") ?? "";
-      const contentType = rawType.split(";")[0]?.trim().toLowerCase() ?? "";
-      if (!["image/jpeg", "image/png", "image/webp"].includes(contentType)) {
-        throw new Error(`Unsupported content type: ${rawType || "missing"}`);
+  for (const url of sourceUrls(spec)) {
+    for (let attempt = 1; attempt <= 2; attempt += 1) {
+      try {
+        const result = await fetchImage(url);
+        return { ...result, source: url };
+      } catch (error) {
+        lastError = error;
+        if (attempt < 2) await sleep(800);
       }
-
-      const downloaded = new Uint8Array(await response.arrayBuffer());
-      const data = new Uint8Array(downloaded.byteLength);
-      data.set(downloaded);
-
-      if (data.byteLength === 0) throw new Error("Downloaded image is empty");
-      if (data.byteLength > MAX_IMAGE_BYTES) {
-        throw new Error(`Image is too large: ${data.byteLength} bytes`);
-      }
-
-      return { contentType, data };
-    } catch (error) {
-      lastError = error;
-      if (attempt < 3) await sleep(attempt * 1_000);
-    } finally {
-      clearTimeout(timeout);
     }
   }
 
   throw new Error(
-    `Failed to download ${spec.kind}:${spec.key} from ${url}: ${lastError instanceof Error ? lastError.message : String(lastError)}`,
+    `Failed to download ${spec.kind}:${spec.key}: ${lastError instanceof Error ? lastError.message : String(lastError)}`,
   );
 }
 
@@ -124,7 +144,7 @@ async function seedImage(spec: ImageSpec): Promise<void> {
 
   if (!ownerUserId) throw new Error(`Seeded ${spec.kind} report not found: ${spec.key}`);
 
-  const { contentType, data } = await downloadImage(spec);
+  const { contentType, data, source } = await downloadImage(spec);
   await prisma.mediaObject.upsert({
     where: { id: mediaId },
     create: {
@@ -149,7 +169,7 @@ async function seedImage(spec: ImageSpec): Promise<void> {
     await prisma.foundReport.update({ where: { id: reportId }, data: { imageUrls: [imageUrl] } });
   }
 
-  console.log(`IMAGE_SEEDED ${spec.kind}:${spec.key} ${contentType} ${data.byteLength}B`);
+  console.log(`IMAGE_SEEDED ${spec.kind}:${spec.key} ${contentType} ${data.byteLength}B source=${source}`);
 }
 
 async function main(): Promise<void> {
