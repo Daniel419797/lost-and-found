@@ -75,6 +75,7 @@ uploadsRouter.get("/media/:id", async (req, res) => {
     "Content-Type": media.contentType,
     "Content-Length": String(media.size),
     "Cache-Control": "public, max-age=31536000, immutable",
+    "Cross-Origin-Resource-Policy": "cross-origin",
     "X-Content-Type-Options": "nosniff",
   });
   res.send(Buffer.from(media.data));
