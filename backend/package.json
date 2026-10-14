@@ -18,6 +18,7 @@
     "prisma:deploy": "prisma migrate deploy",
     "prisma:studio": "prisma studio",
     "admin:bootstrap": "npm run build && node dist/src/scripts/bootstrapAdmin.js",
+    "seed:demo:images": "node dist/src/scripts/seedDemoImages.js",
     "postinstall": "prisma generate"
   },
   "dependencies": {
